@@ -53,23 +53,33 @@ adouble crf::score(const vector<string>& x, const Derivation& y) {
 adouble crf::partition_function(const vector<string>& x) {
   adouble z = 0.0; 
   for (int i = 0; i < x.size(); ++i) {
-    adouble sum = 0.0;
+    vector<adouble> translation_scores;
     const string& source = x[i];
-    
-    map<string, double> features = scorer->score_translation(source, "");
-    sum += exp(dot(features, weights)) * exp(1.0 * weights["suffix_"]);
+
+    // Handle the case where the ith source word translates into NULL
+    {
+      map<string, double> translation_features = scorer->score_translation(source, "");
+      map<string, double> suffix_features = scorer->score_suffix("", "");
+      adouble translation_score = dot(translation_features, weights);
+      adouble suffix_score = dot(suffix_features, weights);
+      translation_scores.push_back(translation_score + suffix_score); 
+    }
 
     for (auto kvp : scorer->fwd_ttable->getTranslations(source)) {
       string target = kvp.first;
-      map<string, double> features = scorer->score_translation(source, target);
+      map<string, double> translation_features = scorer->score_translation(source, target);
 
-      adouble suffix_sum = 0.0;
+      vector<adouble> suffix_scores;
       for (string suffix : scorer->suffix_list) {
-        suffix_sum += exp(1.0 * weights["suffix_" + suffix]);
+        map<string, double> suffix_features = scorer->score_suffix(target, suffix);
+        adouble suffix_score = dot(suffix_features, weights);
+        suffix_scores.push_back(suffix_score);
       }
-      sum += exp(dot(features, weights)) * exp(suffix_sum);
+      adouble suffix_scores_sum = log_sum_exp(suffix_scores);
+      adouble translation_score = dot(translation_features, weights);
+      translation_scores.push_back(translation_score + suffix_scores_sum);
     }
-    z += log(sum);
+    z += log_sum_exp(translation_scores);
   }
   return z;
 }
@@ -101,12 +111,12 @@ adouble crf::slow_partition_function(const vector<string>& x, const map<string, 
     }
 
     // Don't allow all the pieces to translate as NULL
-    if (indices.size() == 0) {
+    /*if (indices.size() == 0) {
       continue;
-    }
+    }*/
 
     vector<vector<string> > candidate_suffixes;
-    for (int i = 0; i < indices.size() - 1; ++i) {
+    for (int i = 0; indices.size() > 0 && i < indices.size() - 1; ++i) {
       vector<string> suffixes;
       for (string suffix : scorer->suffix_list) {
         suffixes.push_back(suffix);
@@ -143,7 +153,8 @@ adouble crf::slow_partition_function(const vector<string>& x, const map<string, 
 
   vector<adouble> scores;
   for (Derivation d : derivations) {
-    scores.push_back(dot(scorer->score(x, d), weights));
+    map<string, double> features = scorer->score(x, d);
+    scores.push_back(dot(features, weights)); 
   }
 
   return log_sum_exp(scores);
@@ -254,12 +265,11 @@ adouble crf::train(const vector<vector<string> >& x, const vector<Derivation>& y
   stack->compute_adjoint();
   for (auto& fv : weights) {
     const double g = fv.second.get_gradient();
-    //historical_gradients[fv.first] = rho * historical_gradients[fv.first] + (1 - rho) * g * g;
-    //double delta = -g * sqrt(historical_deltas[fv.first]) / sqrt(historical_gradients[fv.first]);
-    //historical_deltas[fv.first] = rho * historical_deltas[fv.first] + (1 - rho) * delta * delta;
-    double delta = -g * learning_rate;
+    historical_gradients[fv.first] = rho * historical_gradients[fv.first] + (1 - rho) * g * g;
+    double delta = -g * sqrt(historical_deltas[fv.first] + epsilon) / sqrt(historical_gradients[fv.first] + epsilon);
+    historical_deltas[fv.first] = rho * historical_deltas[fv.first] + (1 - rho) * delta * delta;
+    //double delta = -g * learning_rate;
     weights[fv.first] += delta;
-    cerr << "gradient of weight of " << fv.first << " = " << g << endl;
   }
 
   return log_loss;
@@ -267,8 +277,14 @@ adouble crf::train(const vector<vector<string> >& x, const vector<Derivation>& y
 
 void crf::add_feature(string name) {
   if (weights.find(name) == weights.end()) {
-    weights[name] = 0.0;
+    weights[name] = 3.0;
     historical_deltas[name] = 1.0;
     historical_gradients[name] = 1.0;
   }
+}
+
+tuple<Derivation, double> crf::predict(const vector<string>& x) {
+}
+
+vector<tuple<Derivation, double> > crf::predict(const vector<string>& x, int k) {
 }

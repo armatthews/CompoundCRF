@@ -42,7 +42,8 @@ map<string, double> feature_scorer::score_translation(const string& source,
 }
 
 map<string, double> feature_scorer::score_suffix(const string& root, const string& suffix) {
-  suffix_list.insert(suffix);
+  assert (suffix_list.find(suffix) != suffix_list.end());
+  //suffix_list.insert(suffix);
   map<string, double> features;
   features["suffix_" + suffix] = 1.0;
   return features;
@@ -79,15 +80,6 @@ map<string, double> feature_scorer::score(const vector<string>& source,
       features[kvp.first] += kvp.second;
     }
   }
-
-  assert(features["tgt_null"] == source.size() - permutation.size());
-
-  double fwd_score = lexical_score(fwd_ttable, source, translations, permutation);
-  assert(abs(features["fwd_score"] - fwd_score) < 0.00001);
-
-  double rev_score = lexical_score(rev_ttable, translations, source, permutation);
-  assert(abs(features["rev_score"] - rev_score) < 0.00001);
-
   return features;
 }
 

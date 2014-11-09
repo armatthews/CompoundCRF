@@ -21,7 +21,7 @@
 using namespace std;
 using adept::adouble;
 
-const double eta = 0.5;
+const double eta = 0.1;
 const double lambda = 1.0;
 const int num_noise_samples = 10;
 
@@ -92,6 +92,38 @@ void exception_handler(int sig) {
   exit(1);
 }
 
+void test(int argc, char** argv) {
+  ttable fwd_ttable;
+  ttable rev_ttable;
+  fwd_ttable.load(argv[2]);
+  rev_ttable.load(argv[3]);
+  feature_scorer scorer(&fwd_ttable, &rev_ttable);
+  compound_analyzer analyzer(&fwd_ttable);
+
+  adept::Stack stack;
+  crf model(&stack, &scorer);
+  model.add_feature("fwd_score");
+  model.add_feature("rev_score");
+  model.add_feature("tgt_null");
+  model.add_feature("suffix_n"); 
+  model.add_feature("suffix_");
+  scorer.suffix_list.insert("");
+  scorer.suffix_list.insert("n");
+
+  vector<string> input {"tomato", "processing"};
+
+  cerr << "Computing fast partition function..." << endl;
+  adouble fast = model.partition_function(input);
+  cerr << "Fast partition function: " << fast << endl;
+
+  cerr << "Computing slow partition function..." << endl;
+  adouble slow = model.slow_partition_function(input, model.weights);
+  cerr << "Slow partition function: " << slow << endl;
+
+  double diff = abs(fast.value() - slow.value());
+  assert (diff < 1.0e-6);
+}
+
 int main(int argc, char** argv) {
   signal(SIGSEGV, exception_handler);
   if (argc != 4) {
@@ -99,16 +131,20 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  // Quick sanity check
+  test(argc, argv);
+
   // read training data
   vector<vector<string> > train_source;
   vector<string> train_target;
   vector<vector<Derivation> > train_derivations;
   read_input_file(argv[1], train_source, train_target);
 
-  cerr << "# TRAINING INSTANCES: " << train_source.size() << endl;
+  cerr << "Successfully read " << train_source.size() << " training instances." << endl;
   assert (train_source.size() == train_target.size());
 
   // Read in the ttables
+  cerr << "Loading ttables..." << endl;
   ttable fwd_ttable;
   ttable rev_ttable;
   fwd_ttable.load(argv[2]);
@@ -117,6 +153,7 @@ int main(int argc, char** argv) {
   compound_analyzer analyzer(&fwd_ttable);
 
   // Analyze the target side of the training corpus into lists of possible derivations
+  cerr << "Analying training data..." << endl;
   for (int i = 0; i < train_source.size(); ++i) {
     vector<Derivation> derivations = analyzer.analyze(train_source[i], train_target[i]);
     train_derivations.push_back(derivations);
@@ -134,28 +171,14 @@ int main(int argc, char** argv) {
 
   adept::Stack stack;
   crf model(&stack, &scorer);
-  model.add_feature("fwd_score");
-  model.add_feature("rev_score");
-  model.add_feature("tgt_null");
-  model.add_feature("suffix_s");
-  model.add_feature("suffix_e");
-  model.add_feature("suffix_n");
-  model.add_feature("suffix_en");
-  model.add_feature("suffix_");
-  scorer.score_suffix("", "");
-  scorer.score_suffix("", "s");
-  scorer.score_suffix("", "e");
-  scorer.score_suffix("", "n");
-  scorer.score_suffix("", "en");
-  vector<string> input {"tomato", "processing"};
-  cout << "Slow partition function: " << model.slow_partition_function(input, model.weights) << endl;
-  cout << "Fast partition function: " << model.partition_function(input) << endl;
-  exit(1);
   noise_model noise_generator(&fwd_ttable);
 
   // Preload features into the CRF to avoid adept errors
   for (int i = 0; i < train_source.size(); ++i) {
     for (Derivation& derivation : train_derivations[i]) {
+      for (string suffix : derivation.suffixes) {
+        scorer.suffix_list.insert(suffix);
+      }
       map<string, double> features = scorer.score(train_source[i], derivation);
       for (auto& kvp : features) {
         model.add_feature(kvp.first);
@@ -177,8 +200,6 @@ int main(int argc, char** argv) {
   assert (train_source.size() == train_derivations.size());
   cerr << train_source.size() << " reachable examples remain." << endl;
 
-  const double eta = 0.01;
-  const double lambda = 10.0;
   adouble loss;
   vector<Derivation> chosen_derivations = sample_derivations(&model, train_source, train_derivations);
 
@@ -193,14 +214,13 @@ int main(int argc, char** argv) {
     loss = model.train(train_source, chosen_derivations, noise_samples, eta, lambda);
     //loss = model.train(train_source, chosen_derivations, eta, lambda);
     cerr << "Iteration " << iter + 1 << " loss: " << loss << endl;
-    /*for (auto kvp : model.weights) {
-      cerr << "  " << kvp.first << ": " << kvp.second << endl;
-    }*/
   }
 
   cerr << "Final loss: " << loss << endl;
   cerr << "Final weights: " << endl;
   for (auto kvp : model.weights) {
-    cerr << "  " << kvp.first << ": " << kvp.second << endl;
+    if (abs(kvp.second) > 1.0e-10) {
+      cerr << "  " << kvp.first << ": " << kvp.second << endl;
+    }
   }
 }

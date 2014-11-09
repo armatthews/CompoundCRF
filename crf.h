@@ -2,12 +2,14 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <tuple>
 #include "adept.h"
 #include "utils.h"
 #include "feature_scorer.h"
 using std::string;
 using std::vector;
 using std::map;
+using std::tuple;
 using adept::adouble;
 
 class crf {
@@ -25,6 +27,9 @@ public:
   adouble train(const vector<vector<string>>& x, const vector<Derivation>& z, double learning_rate, double l2_strength);
   adouble train(const vector<vector<string>>& x, const vector<Derivation>& z, const vector<vector<Derivation> >& noise_samples, double learning_rate, double l2_strength);
   void add_feature(string name);
+
+  tuple<Derivation, double> predict(const vector<string>& x);
+  vector<tuple<Derivation, double> > predict(const vector<string>& x, int k);
 
 //private:
   map<string, adouble> weights;
