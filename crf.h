@@ -17,6 +17,7 @@ public:
   crf(adept::Stack* stack, feature_scorer* scorer);
   adouble dot(const map<string, double>& features, const map<string, adouble>& weights);
   adouble score(const vector<string>& x, const Derivation& y);
+  adouble word_partition_function(const string& source);
   adouble partition_function(const vector<string>& x);
   adouble slow_partition_function(const vector<string>& x,
     const map<string, adouble>& weights);
@@ -28,8 +29,7 @@ public:
   adouble train(const vector<vector<string>>& x, const vector<Derivation>& z, const vector<vector<Derivation> >& noise_samples, double learning_rate, double l2_strength);
   void add_feature(string name);
 
-  tuple<Derivation, double> predict(const vector<string>& x);
-  vector<tuple<Derivation, double> > predict(const vector<string>& x, int k);
+  vector<tuple<double, Derivation> > predict(const vector<string>& x, int k=1);
 
 //private:
   map<string, adouble> weights;

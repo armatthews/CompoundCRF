@@ -23,7 +23,7 @@ using adept::adouble;
 
 const double eta = 0.1;
 const double lambda = 1.0;
-const int num_noise_samples = 10;
+const int num_noise_samples = 100;
 
 void read_input_file(string filename, vector<vector<string> >& X, vector<string>& Y) {
   ifstream f(filename);
@@ -110,7 +110,7 @@ void test(int argc, char** argv) {
   scorer.suffix_list.insert("");
   scorer.suffix_list.insert("n");
 
-  vector<string> input {"tomato", "processing"};
+  vector<string> input {"tomato", "processing"}; 
 
   cerr << "Computing fast partition function..." << endl;
   adouble fast = model.partition_function(input);
@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
   compound_analyzer analyzer(&fwd_ttable);
 
   // Analyze the target side of the training corpus into lists of possible derivations
-  cerr << "Analying training data..." << endl;
+  cerr << "Analyzing training data..." << endl;
   for (int i = 0; i < train_source.size(); ++i) {
     vector<Derivation> derivations = analyzer.analyze(train_source[i], train_target[i]);
     train_derivations.push_back(derivations);
@@ -211,8 +211,8 @@ int main(int argc, char** argv) {
   cerr << "Iteration " << 0 << " loss: " << loss << endl;
 
   for (unsigned iter = 0; iter < 100; ++iter) {
-    loss = model.train(train_source, chosen_derivations, noise_samples, eta, lambda);
-    //loss = model.train(train_source, chosen_derivations, eta, lambda);
+    //loss = model.train(train_source, chosen_derivations, noise_samples, eta, lambda);
+    loss = model.train(train_source, chosen_derivations, eta, lambda);
     cerr << "Iteration " << iter + 1 << " loss: " << loss << endl;
   }
 
@@ -222,5 +222,11 @@ int main(int argc, char** argv) {
     if (abs(kvp.second) > 1.0e-10) {
       cerr << "  " << kvp.first << ": " << kvp.second << endl;
     }
+  }
+
+  vector<tuple<double, Derivation> > kbest = model.predict(train_source[0], 10);
+  cerr << "Got " << kbest.size() << " best hypotheses:" << endl;
+  for (int i = 0; i < kbest.size(); ++i) {
+    cout << i << " ||| " << get<1>(kbest[i]).toLongString() << " ||| " << get<0>(kbest[i]) << endl;
   }
 }

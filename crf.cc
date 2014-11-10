@@ -38,7 +38,7 @@ adouble crf::dot(const map<string, double>& features, const map<string, adouble>
     if (weights.find(kvp.first) == weights.end()) {
       cerr << "ERROR: Invalid attempt to use unknown feature \"" << kvp.first << "\"." << endl;
     }
-    assert (weights.find(kvp.first) != weights.end());
+    assert(weights.find(kvp.first) != weights.end());
     auto x = weights.find(kvp.first);
     score += x->second * kvp.second;
   }
@@ -50,11 +50,39 @@ adouble crf::score(const vector<string>& x, const Derivation& y) {
   return dot(features, weights);
 }
 
+// Computes log of sum_t sum_s exp (score(t|w) + score(s|t))
+// where w is the source word
+// t is a translation of w
+// and s is a suffix on t
+// Does NOT handle th ecase where w translates into NULL.
+adouble crf::word_partition_function(const string& source) {
+  vector<adouble> translation_scores;
+  for (auto kvp : scorer->fwd_ttable->getTranslations(source)) {
+    string target = kvp.first;
+    map<string, double> translation_features = scorer->score_translation(source, target);
+
+    vector<adouble> suffix_scores;
+    for (string suffix : scorer->suffix_list) {
+      map<string, double> suffix_features = scorer->score_suffix(target, suffix);
+      adouble suffix_score = dot(suffix_features, weights);
+      suffix_scores.push_back(suffix_score);
+    }
+    adouble suffix_scores_sum = log_sum_exp(suffix_scores);
+    adouble translation_score = dot(translation_features, weights);
+
+    translation_scores.push_back(translation_score + suffix_scores_sum);
+  }
+  return log_sum_exp(translation_scores);
+}
+
 adouble crf::partition_function(const vector<string>& x) {
-  adouble z = 0.0; 
+  adouble z = 0.0;
+  vector<adouble> non_null_scores;
+  vector<adouble> null_scores;
   for (int i = 0; i < x.size(); ++i) {
-    vector<adouble> translation_scores;
     const string& source = x[i];
+    adouble non_null_score = word_partition_function(source);
+    adouble null_score;
 
     // Handle the case where the ith source word translates into NULL
     {
@@ -62,26 +90,35 @@ adouble crf::partition_function(const vector<string>& x) {
       map<string, double> suffix_features = scorer->score_suffix("", "");
       adouble translation_score = dot(translation_features, weights);
       adouble suffix_score = dot(suffix_features, weights);
-      translation_scores.push_back(translation_score + suffix_score); 
+      null_score = translation_score + suffix_score;
     }
 
-    for (auto kvp : scorer->fwd_ttable->getTranslations(source)) {
-      string target = kvp.first;
-      map<string, double> translation_features = scorer->score_translation(source, target);
-
-      vector<adouble> suffix_scores;
-      for (string suffix : scorer->suffix_list) {
-        map<string, double> suffix_features = scorer->score_suffix(target, suffix);
-        adouble suffix_score = dot(suffix_features, weights);
-        suffix_scores.push_back(suffix_score);
-      }
-      adouble suffix_scores_sum = log_sum_exp(suffix_scores);
-      adouble translation_score = dot(translation_features, weights);
-      translation_scores.push_back(translation_score + suffix_scores_sum);
-    }
-    z += log_sum_exp(translation_scores);
+    non_null_scores.push_back(non_null_score);
+    null_scores.push_back(null_score);
   }
-  return z;
+
+  assert(null_scores.size() == x.size());
+  assert(non_null_scores.size() == x.size());
+  assert(x.size() <= 5);
+
+  vector<adouble> final_scores;
+  const int factorial[] = {1, 1, 2, 6, 24, 120};
+  for (unsigned int i = 0; i < (1 << x.size()); ++i) {
+    adouble score = 0.0;
+    for (int j = 0; j < x.size(); ++j) {
+      if (i & (1 << j)) {
+        score += non_null_scores[j];
+      }
+      else {
+        score += null_scores[j];
+      }
+    }
+    assert(popCount(i) <= 5);
+    score += log(factorial[popCount(i)]);
+    final_scores.push_back(score);
+  }
+
+  return log_sum_exp(final_scores);
 }
 
 adouble crf::slow_partition_function(const vector<string>& x, const map<string, adouble>& weights) {
@@ -94,7 +131,7 @@ adouble crf::slow_partition_function(const vector<string>& x, const map<string, 
     }
     candidate_translations.push_back(translations);
   }
-  assert (candidate_translations.size() == x.size());
+  assert(candidate_translations.size() == x.size());
 
 
   vector<Derivation> derivations;
@@ -134,7 +171,7 @@ adouble crf::slow_partition_function(const vector<string>& x, const map<string, 
       }
       candidate_suffixes.push_back(suffixes);
     }
-    assert (candidate_suffixes.size() == indices.size());
+    assert(candidate_suffixes.size() == indices.size());
 
     // Loop over all possible permutations.
     do { 
@@ -144,7 +181,7 @@ adouble crf::slow_partition_function(const vector<string>& x, const map<string, 
           suffixes[indices[i]] = chosen_suffixes[i];
         } 
 
-        assert (suffixes.size() == translations.size());
+        assert(suffixes.size() == translations.size());
         Derivation derivation { translations, suffixes, indices };
         derivations.push_back(derivation);
       }
@@ -162,7 +199,7 @@ adouble crf::slow_partition_function(const vector<string>& x, const map<string, 
 
 adouble crf::score_noise(const vector<string>& x, const Derivation& y) {
   adouble score = 0.0;
-  assert (x.size() == y.translations.size());
+  assert(x.size() == y.translations.size());
   for (int i = 0; i < x.size(); ++i) {
     double s;
     bool found = scorer->fwd_ttable->getScore(x[i], y.translations[i], s);
@@ -178,8 +215,8 @@ adouble crf::nce_loss(const vector<string>& x, const Derivation& y, const vector
 
   adouble py = score(x, y); // log u_model(x, y)
   adouble ny = score_noise(x, y); // log u_noise(x, y)
-  assert (isfinite(py.value()));
-  assert (isfinite(ny.value()));
+  assert(isfinite(py.value()));
+  assert(isfinite(ny.value()));
 
   adouble pd1y = py - log_sum_exp(py, ny, 1.0, k); // log p(D = 1 | x, y)
   adouble pd0y = log(k) + ny - log_sum_exp(py, ny, 1.0, k); // log p(D = 0 | x, y)
@@ -222,7 +259,7 @@ adouble crf::l2penalty(const double lambda) {
 
 adouble crf::train(const vector<vector<string> >& x, const vector<Derivation>& y,
     double learning_rate, double l2_strength) {
-  assert (x.size() == y.size());
+  assert(x.size() == y.size());
   stack->new_recording();
   adouble log_loss = 0.0;
   for (unsigned i = 0; i < x.size(); ++i) {
@@ -232,7 +269,7 @@ adouble crf::train(const vector<vector<string> >& x, const vector<Derivation>& y
       cerr << "n = " << n << endl;
       cerr << "d = " << d << endl;
     }
-    assert (n < d);
+    assert(n < d);
     log_loss -= n - d;
   }
   log_loss += l2penalty(l2_strength);
@@ -253,7 +290,7 @@ adouble crf::train(const vector<vector<string> >& x, const vector<Derivation>& y
 
 adouble crf::train(const vector<vector<string> >& x, const vector<Derivation>& y,
     const vector<vector<Derivation> >& noise_samples, double learning_rate, double l2_strength) {
-  assert (x.size() == y.size());
+  assert(x.size() == y.size());
   stack->new_recording();
   adouble log_loss = 0.0;
   for (unsigned i = 0; i < x.size(); ++i) {
@@ -277,14 +314,100 @@ adouble crf::train(const vector<vector<string> >& x, const vector<Derivation>& y
 
 void crf::add_feature(string name) {
   if (weights.find(name) == weights.end()) {
-    weights[name] = 3.0;
+    weights[name] = 0.0;
     historical_deltas[name] = 1.0;
     historical_gradients[name] = 1.0;
   }
 }
 
-tuple<Derivation, double> crf::predict(const vector<string>& x) {
-}
+vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, int k) {
+  scorer->suffix_list.insert("");
+  // First we find the k-best (translation, suffix) pairs for each index in x
+  vector<vector<tuple<adouble, string, string> > > best_pieces;
+  for (int i = 0; i < x.size(); ++i) {
+    vector<tuple<adouble, string, string> > local_best_pieces;
+    local_best_pieces.reserve(k + 1);
 
-vector<tuple<Derivation, double> > crf::predict(const vector<string>& x, int k) {
+    string source = x[i];
+    vector<string> translation_list;
+    translation_list.push_back("");
+    for (auto kvp : scorer->fwd_ttable->getTranslations(source)) {
+      translation_list.push_back(kvp.first);
+    }
+
+    for (string target : translation_list) {
+      map<string, double> translation_features = scorer->score_translation(source, target);
+      adouble translation_score = dot(translation_features, weights);
+      for (string suffix : scorer->suffix_list) {
+        if (target.size() == 0 && suffix.size() != 0) {
+          continue;
+        }
+        map<string, double> suffix_features = scorer->score_suffix(target, suffix);
+        adouble suffix_score = dot(suffix_features, weights);
+        adouble total_score = suffix_score + translation_score;
+        if (local_best_pieces.size() < k ||
+            total_score > get<0>(local_best_pieces[local_best_pieces.size() - 1])) {
+          local_best_pieces.push_back(make_tuple(total_score, target, suffix));
+          std::sort(local_best_pieces.rbegin(), local_best_pieces.rend());
+          assert(local_best_pieces.size() <= k + 1);
+          if (local_best_pieces.size() == k + 1) {
+            local_best_pieces.pop_back();
+          }
+        }
+      }
+    }
+    best_pieces.push_back(local_best_pieces);
+  }
+  assert(best_pieces.size() == x.size());
+
+  vector<tuple<double, Derivation> > kbest;
+   
+  // Now that we have the k-best (translation, suffix) pairs for each index,
+  // run cube pruning to find our final k-best
+  vector<tuple<adouble, vector<int> > > candidates;
+  vector<int> start(x.size(), 0);
+  assert(start.size() == x.size()); 
+  adouble start_score = 0.0;
+  for (int i = 0; i < x.size(); ++i) {
+    assert(best_pieces[i].size() > 0);
+    start_score += get<0>(best_pieces[i][0]);
+  }
+  candidates.push_back(make_tuple(start_score, start));
+ 
+  while (candidates.size() > 0 && kbest.size() < k) { 
+    auto best_candidate = candidates[candidates.size() - 1];
+    candidates.pop_back();
+    adouble score = get<0>(best_candidate);
+    vector<int> indices = get<1>(best_candidate);
+    assert(indices.size() == x.size());
+
+    Derivation d;
+    assert(d.translations.size() == d.suffixes.size());
+    for (int i = 0; i < indices.size(); ++i) {
+      auto& piece = best_pieces[i][indices[i]];
+      string& translation = get<1>(piece);
+      string& suffix = get<2>(piece);
+      d.translations.push_back(translation);
+      d.suffixes.push_back(suffix);
+      assert(d.translations.size() == d.suffixes.size());
+      if (translation.size() > 0) {
+        d.permutation.push_back(i);
+      }
+    }
+    assert(d.translations.size() == d.suffixes.size());
+    assert(d.translations.size() == x.size());
+    kbest.push_back(make_tuple(score.value(), d));
+
+    assert (indices.size() == x.size());
+    for (int i = 0; i < indices.size(); ++i) {
+      vector<int> new_indices(indices.begin(), indices.end());
+      assert (new_indices.size() == indices.size());
+      new_indices[i]++;
+      assert (new_indices.size() == x.size());
+      adouble new_score = score - get<0>(best_pieces[i][indices[i]])
+          + get<0>(best_pieces[i][new_indices[i]]);
+      candidates.push_back(make_tuple(new_score, new_indices));
+    }
+  }
+  return kbest;
 }

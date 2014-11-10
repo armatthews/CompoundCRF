@@ -46,6 +46,18 @@ vector<vector<string> > cross(vector<vector<string> > vectors ) {
   }
 }
 
+unsigned int popCount(unsigned int i) {
+  unsigned int r = 0;
+  unsigned int one = 1;
+  for (int b = 0; b < 8 * sizeof(unsigned int); ++b) {
+    unsigned int mask = one << b;
+    if (i & mask) {
+      ++r;
+    }
+  }
+  return r;
+}
+
 string Derivation::toString() {
   assert(suffixes.size() == translations.size());
   ostringstream ss;
