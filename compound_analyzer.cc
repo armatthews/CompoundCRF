@@ -8,6 +8,10 @@ compound_analyzer::compound_analyzer(ttable* fwd_ttable) {
   this->fwd_ttable = fwd_ttable;
 }
 
+// Takes in a set of translations and an ordering
+// and finds the suffixes necessary to create the compound word given
+// out of the pieces given, in the order given.
+// If this is not possible, returns false. If possible, returns true.
 bool compound_analyzer::decompose(string compound, const vector<string>& pieces,
     vector<int> permutation, vector<string>& suffixes) {
   suffixes.clear();
@@ -25,7 +29,7 @@ bool compound_analyzer::decompose(string compound, const vector<string>& pieces,
     }
 
     string prefix = remainder.substr(0, location);
-    if (i == 0) {
+    if (i == 0 || pieces[i - 1].size() == 0) {
       if (prefix.size() > 0) {
         return false;
       }

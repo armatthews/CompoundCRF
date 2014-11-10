@@ -213,75 +213,115 @@ adouble crf::nce_loss(const vector<string>& x, const Derivation& y, const vector
   int k = n.size();
   adouble loss = 0.0;
 
-  adouble py = score(x, y); // log u_model(x, y)
+  adouble py = score(x, y);       // log u_model(x, y)
   adouble ny = score_noise(x, y); // log u_noise(x, y)
   assert(isfinite(py.value()));
   assert(isfinite(ny.value()));
 
-  adouble pd1y = py - log_sum_exp(py, ny, 1.0, k); // log p(D = 1 | x, y)
+  adouble pd1y = py - log_sum_exp(py, ny, 1.0, k);          // log p(D = 1 | x, y)
   adouble pd0y = log(k) + ny - log_sum_exp(py, ny, 1.0, k); // log p(D = 0 | x, y)
-  if (abs(exp(pd0y) + exp(pd1y) - 1.0) >= 0.0001) {
-    cerr << "py = " << py << endl;
-    cerr << "ny = " << py << endl;
-    cerr << "pd0y = " << pd0y << endl;
-    cerr << "pd1y = " << pd1y << endl;
-  }
-  assert(exp(pd1y) >= 0.0 && exp(pd1y) <= 1.0);
-  assert(abs(exp(pd0y) + exp(pd1y) - 1.0) < 0.0001);
+  assert(exp(pd1y) >= 0.0 && exp(pd1y) <= 1.0);             // Ensure p(D = 0 | x, y) is between 0 and 1
+  assert(abs(exp(pd0y) + exp(pd1y) - 1.0) < 0.0001);        // Ensure p(D = 0 | .) + p(D + 1 | .) = 1
 
   loss += pd1y;
 
   for (int i = 0; i < k; ++i) {
-    const Derivation& z = n[i]; // z is a noise sample
-    adouble pz = score(x, z); // log u_model(x, z);
-    adouble nz = score_noise(x, z); // log u_noise(x, z);
+    const Derivation& z = n[i];                               // z is a noise sample
+    adouble pz = score(x, z);                                 // log u_model(x, z);
+    adouble nz = score_noise(x, z);                           // log u_noise(x, z);
     adouble pd0z = log(k) + nz - log_sum_exp(pz, nz, 1.0, k); // p(D = 0 | x, y);
-    adouble pd1z = pz - log_sum_exp(pz, nz, 1.0, k); // p(D = 1 | x, y);
-    if (abs(exp(pd0z) + exp(pd1z) - 1.0) >= 0.0001) {
-      cerr << "pz = " << pz << endl;
-      cerr << "nz = " << pz << endl;
-      cerr << "pd0z = " << pd0z << endl;
-      cerr << "pd1z = " << pd1z << endl;
-    }
-    assert(exp(pd0z) >= 0.0 && exp(pd1y) <= 1.0);
-    assert(abs(exp(pd0z) + exp(pd1z) - 1.0) < 0.0001);
+    adouble pd1z = pz - log_sum_exp(pz, nz, 1.0, k);          // p(D = 1 | x, y);
+    assert(exp(pd0z) >= 0.0 && exp(pd0z) <= 1.0);             // Ensure p(D = 0 | x, y) is between 0 and 1
+    assert(abs(exp(pd0z) + exp(pd1z) - 1.0) < 0.0001);        // Ensure p(D = 0 | .) + p(D + 1 | .) = 1
     loss += pd0z;
   }
+
   return loss;
 }
 
 adouble crf::l2penalty(const double lambda) {
   adouble res = 0.0;
-  for (auto& kvp : weights)
+  for (auto& kvp : weights) {
     res += lambda * kvp.second * kvp.second;
+  }
   return res;
 }
 
-adouble crf::train(const vector<vector<string> >& x, const vector<Derivation>& y,
+adouble crf::train(const vector<vector<string> >& x, const vector<vector<Derivation> >& y,
     double learning_rate, double l2_strength) {
   assert(x.size() == y.size());
-  stack->new_recording();
   adouble log_loss = 0.0;
+  stack->new_recording();
   for (unsigned i = 0; i < x.size(); ++i) {
-    adouble n = score(x[i], y[i]);
     adouble d = partition_function(x[i]);
-    if (n >= d) {
-      cerr << "n = " << n << endl;
-      cerr << "d = " << d << endl;
+    vector<adouble> scores;
+    for (unsigned int j = 0; j < y[i].size(); ++j) {
+      scores.push_back(2 * score(x[i], y[i][j]));
     }
-    assert(n < d);
-    log_loss -= n - d;
+    adouble log_total = log_sum_exp(scores);
+
+    //adouble slow = slow_partition_function(x[i], weights);
+    //assert(abs(d - slow) < 0.0001);
+    for (unsigned int j = 0; j < y[i].size(); ++j) {
+      adouble n = score(x[i], y[i][j]);
+      assert(n < d);
+      adouble log_prob = n - d;
+      adouble weight = scores[j] - log_total;
+      log_loss -= log_prob + weight;
+    }
   }
   log_loss += l2penalty(l2_strength);
 
   log_loss.set_gradient(1.0);
   stack->compute_adjoint();
+  const bool use_adadelta = true;
   for (auto& fv : weights) {
     const double g = fv.second.get_gradient();
-    //historical_gradients[fv.first] = rho * historical_gradients[fv.first] + (1 - rho) * g * g;
-    //double delta = -g * sqrt(historical_deltas[fv.first]) / sqrt(historical_gradients[fv.first]);
-    //historical_deltas[fv.first] = rho * historical_deltas[fv.first] + (1 - rho) * delta * delta;
-    double delta = -g * learning_rate;
+    double delta;
+    if (use_adadelta) {
+      historical_gradients[fv.first] = rho * historical_gradients[fv.first] + (1 - rho) * g * g;
+      delta = -g * sqrt(historical_deltas[fv.first]) / sqrt(historical_gradients[fv.first]);
+      historical_deltas[fv.first] = rho * historical_deltas[fv.first] + (1 - rho) * delta * delta;
+    }
+    else {
+      delta = -g * learning_rate;
+    }
+    weights[fv.first] += delta;
+  }
+
+  return log_loss;
+}
+
+adouble crf::train(const vector<vector<string> >& x, const vector<Derivation>& y,
+    double learning_rate, double l2_strength) {
+  assert(x.size() == y.size());
+  adouble log_loss = 0.0;
+  stack->new_recording();
+  for (unsigned i = 0; i < x.size(); ++i) {
+    adouble n = score(x[i], y[i]);
+    adouble d = partition_function(x[i]);
+    //adouble slow = slow_partition_function(x[i], weights);
+    //assert(abs(d - slow) < 0.0001);
+    assert(n < d);
+    adouble log_prob = n - d;
+    log_loss -= log_prob;
+  }
+  log_loss += l2penalty(l2_strength);
+
+  log_loss.set_gradient(1.0);
+  stack->compute_adjoint();
+  const bool use_adadelta = false;
+  for (auto& fv : weights) {
+    const double g = fv.second.get_gradient();
+    double delta;
+    if (use_adadelta) {
+      historical_gradients[fv.first] = rho * historical_gradients[fv.first] + (1 - rho) * g * g;
+      delta = -g * sqrt(historical_deltas[fv.first]) / sqrt(historical_gradients[fv.first]);
+      historical_deltas[fv.first] = rho * historical_deltas[fv.first] + (1 - rho) * delta * delta;
+    }
+    else {
+      delta = -g * learning_rate;
+    }
     weights[fv.first] += delta;
   }
 
@@ -300,12 +340,18 @@ adouble crf::train(const vector<vector<string> >& x, const vector<Derivation>& y
 
   log_loss.set_gradient(1.0);
   stack->compute_adjoint();
+  const bool use_adadelta = true;
   for (auto& fv : weights) {
     const double g = fv.second.get_gradient();
-    historical_gradients[fv.first] = rho * historical_gradients[fv.first] + (1 - rho) * g * g;
-    double delta = -g * sqrt(historical_deltas[fv.first] + epsilon) / sqrt(historical_gradients[fv.first] + epsilon);
-    historical_deltas[fv.first] = rho * historical_deltas[fv.first] + (1 - rho) * delta * delta;
-    //double delta = -g * learning_rate;
+    double delta;
+    if (use_adadelta) {
+      historical_gradients[fv.first] = rho * historical_gradients[fv.first] + (1 - rho) * g * g;
+      delta = -g * sqrt(historical_deltas[fv.first] + epsilon) / sqrt(historical_gradients[fv.first] + epsilon);
+      historical_deltas[fv.first] = rho * historical_deltas[fv.first] + (1 - rho) * delta * delta;
+    }
+    else {
+      delta = -g * learning_rate;
+    }
     weights[fv.first] += delta;
   }
 
@@ -402,11 +448,13 @@ vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, int k) 
     for (int i = 0; i < indices.size(); ++i) {
       vector<int> new_indices(indices.begin(), indices.end());
       assert (new_indices.size() == indices.size());
-      new_indices[i]++;
-      assert (new_indices.size() == x.size());
-      adouble new_score = score - get<0>(best_pieces[i][indices[i]])
-          + get<0>(best_pieces[i][new_indices[i]]);
-      candidates.push_back(make_tuple(new_score, new_indices));
+      if (new_indices[i] + 1 < best_pieces[i].size()) {
+        new_indices[i]++;
+        assert (new_indices.size() == x.size());
+        adouble new_score = score - get<0>(best_pieces[i][indices[i]])
+            + get<0>(best_pieces[i][new_indices[i]]);
+        candidates.push_back(make_tuple(new_score, new_indices));
+      }
     }
   }
   return kbest;

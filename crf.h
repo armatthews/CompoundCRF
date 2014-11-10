@@ -25,6 +25,7 @@ public:
   adouble nce_loss(const vector<string>& x, const Derivation& y, const vector<Derivation>& n);
 
   adouble l2penalty(const double lambda);
+  adouble train(const vector<vector<string>>& x, const vector<vector<Derivation> >& z, double learning_rate, double l2_strength);
   adouble train(const vector<vector<string>>& x, const vector<Derivation>& z, double learning_rate, double l2_strength);
   adouble train(const vector<vector<string>>& x, const vector<Derivation>& z, const vector<vector<Derivation> >& noise_samples, double learning_rate, double l2_strength);
   void add_feature(string name);

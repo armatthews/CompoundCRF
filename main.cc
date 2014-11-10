@@ -22,8 +22,8 @@ using namespace std;
 using adept::adouble;
 
 const double eta = 0.1;
-const double lambda = 1.0;
-const int num_noise_samples = 100;
+const double lambda = 0.0;
+const int num_noise_samples = 10;
 
 void read_input_file(string filename, vector<vector<string> >& X, vector<string>& Y) {
   ifstream f(filename);
@@ -200,33 +200,65 @@ int main(int argc, char** argv) {
   assert (train_source.size() == train_derivations.size());
   cerr << train_source.size() << " reachable examples remain." << endl;
 
+  train_derivations[0].erase(train_derivations[0].begin());
+  train_derivations[0].erase(train_derivations[0].begin());
+  train_derivations[0].erase(train_derivations[0].begin());
+  //train_derivations[0].erase(train_derivations[0].begin() + 1);
+
   adouble loss;
   vector<Derivation> chosen_derivations = sample_derivations(&model, train_source, train_derivations);
+  assert (chosen_derivations.size() == train_source.size());
+  for (int i = 0; i < train_source.size(); ++i) {
+    for (int j = 0; j < train_source[i].size(); ++j) {
+      //cerr << train_source[i][j] << " "; 
+    }
+    //cerr << "||| " << chosen_derivations[i].toLongString() << endl;
+  }
+
+  for (int i = 0; i < train_source.size(); ++i) {
+    for (int j = 0; j < train_derivations[i].size(); ++j) {
+      cerr << "Training derivation: " << train_derivations[i][j].toLongString() << endl;
+    }
+  }
 
   loss = 0.0;
-  for (unsigned i = 0; i < train_source.size(); ++i) {
+  /*for (unsigned i = 0; i < train_source.size(); ++i) {
     loss += model.nce_loss(train_source[i], chosen_derivations[i], noise_samples[i]);
   }
   loss += model.l2penalty(lambda);
-  cerr << "Iteration " << 0 << " loss: " << loss << endl;
+  cerr << "Iteration " << 0 << " loss: " << loss << endl;*/
 
   for (unsigned iter = 0; iter < 100; ++iter) {
     //loss = model.train(train_source, chosen_derivations, noise_samples, eta, lambda);
     loss = model.train(train_source, chosen_derivations, eta, lambda);
+    //loss = model.train(train_source, train_derivations, eta, lambda);
     cerr << "Iteration " << iter + 1 << " loss: " << loss << endl;
   }
 
   cerr << "Final loss: " << loss << endl;
   cerr << "Final weights: " << endl;
   for (auto kvp : model.weights) {
-    if (abs(kvp.second) > 1.0e-10) {
+    if (abs(kvp.second) > 0.0) {
       cerr << "  " << kvp.first << ": " << kvp.second << endl;
     }
   }
 
-  vector<tuple<double, Derivation> > kbest = model.predict(train_source[0], 10);
-  cerr << "Got " << kbest.size() << " best hypotheses:" << endl;
-  for (int i = 0; i < kbest.size(); ++i) {
-    cout << i << " ||| " << get<1>(kbest[i]).toLongString() << " ||| " << get<0>(kbest[i]) << endl;
+  for (int j = 0; j < train_source.size(); ++j) {
+    vector<string>& input = train_source[j];
+
+    for (Derivation& gold : train_derivations[j]) {
+      map<string, double> features = scorer.score(input, gold);
+      double score = model.dot(features, model.weights).value();
+      cout << j << " ||| G ||| " << gold.toLongString(features) << "||| " << score << endl;
+    }
+
+    vector<tuple<double, Derivation> > kbest = model.predict(input, 10); 
+    for (int i = 0; i < kbest.size(); ++i) {
+      double score = get<0>(kbest[i]);
+      Derivation& derivation = get<1>(kbest[i]);
+      map<string, double> features = scorer.score(input, derivation);
+      cout << j << " ||| " <<  i << " ||| ";
+      cout << derivation.toLongString(features) << "||| " << score << endl;
+    }
   }
 }

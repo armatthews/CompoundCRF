@@ -42,8 +42,8 @@ map<string, double> feature_scorer::score_translation(const string& source,
 }
 
 map<string, double> feature_scorer::score_suffix(const string& root, const string& suffix) {
-  assert (suffix_list.find(suffix) != suffix_list.end());
-  //suffix_list.insert(suffix);
+  //assert (suffix_list.find(suffix) != suffix_list.end());
+  suffix_list.insert(suffix);
   map<string, double> features;
   features["suffix_" + suffix] = 1.0;
   return features;

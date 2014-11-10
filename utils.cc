@@ -83,8 +83,13 @@ string Derivation::toLongString(const map<string, double>& features) {
       ss << translations[i] << "+" << suffixes[i] << " ";
     }
     else {
-      assert(suffixes[i].size() == 0);
-      ss << "NULL ";
+      //assert(suffixes[i].size() == 0);
+      if (suffixes[i].size() == 0) {
+        ss << "NULL ";
+      }
+      else {
+        ss << "NULL+" << suffixes[i] << " ";
+      }
     }
   }
   ss << "||| ";
