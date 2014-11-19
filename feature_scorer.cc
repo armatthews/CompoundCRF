@@ -35,7 +35,11 @@ double feature_scorer::lexical_score(ttable* table, const vector<string>& source
 map<string, double> feature_scorer::score_translation(const string& source,
     const string& target) {
   map<string, double> features;
-  features["tgt_null"] = (target.size() == 0) ? 1 : 0;
+  if (target.size() == 0) {
+    features["tgt_null"] = 1;
+    features[source + "_to_null"] = 1;
+    features["null_score"] = lexical_score(rev_ttable, "<eps>", source);
+  }
   features["fwd_score"] = lexical_score(fwd_ttable, source, target);
   features["rev_score"] = lexical_score(rev_ttable, target, source);
   return features;

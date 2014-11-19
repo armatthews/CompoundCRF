@@ -35,7 +35,7 @@ bool compound_analyzer::decompose(string compound, const vector<string>& pieces,
       }
     }
     else {
-      suffixes[i - 1] = prefix;
+      suffixes[permutation[i - 1]] = prefix;
     }
 
     assert (location + pieces[j].size() <= remainder.size());
@@ -115,9 +115,23 @@ vector<Derivation> compound_analyzer::analyze(const vector<string>& english, str
         continue;
       }
 
+      bool valid = true;
+      // Only allow derivations with at least two non-NULL pieces
+      // If it only has one non-NULL piece, then it's a WORD not a COMPOUND
+      valid &= (indices.size() >= 2);
+      // Only allow derivations where suffixes are <= 2 characters in length
+      /*for (string suffix : suffixes) {
+        if (suffix.size() > 2) {
+          valid = false;
+          break;
+        }
+      }*/
+
       assert (suffixes.size() == translations.size());
-      Derivation derivation { translations, suffixes, indices };
-      derivations.push_back(derivation);
+      if (valid) {
+        Derivation derivation { translations, suffixes, indices };
+        derivations.push_back(derivation);
+      }
 
     } while (next_permutation(indices.begin(), indices.end()));
   }

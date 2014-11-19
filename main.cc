@@ -21,9 +21,9 @@
 using namespace std;
 using adept::adouble;
 
-const double eta = 0.1;
+const double eta = 0.01;
 const double lambda = 0.0;
-const int num_noise_samples = 10;
+const int num_noise_samples = 100;
 
 void read_input_file(string filename, vector<vector<string> >& X, vector<string>& Y) {
   ifstream f(filename);
@@ -105,8 +105,11 @@ void test(int argc, char** argv) {
   model.add_feature("fwd_score");
   model.add_feature("rev_score");
   model.add_feature("tgt_null");
+  model.add_feature("null_score");
   model.add_feature("suffix_n"); 
   model.add_feature("suffix_");
+  model.add_feature("tomato_to_null");
+  model.add_feature("processing_to_null");
   scorer.suffix_list.insert("");
   scorer.suffix_list.insert("n");
 
@@ -155,12 +158,29 @@ int main(int argc, char** argv) {
   // Analyze the target side of the training corpus into lists of possible derivations
   cerr << "Analyzing training data..." << endl;
   for (int i = 0; i < train_source.size(); ++i) {
+    cerr << i << "/" << train_source.size() << "\r";
     vector<Derivation> derivations = analyzer.analyze(train_source[i], train_target[i]);
+    for (Derivation& d : derivations) {
+      if (d.toString() != train_target[i]) {
+        cerr << "source: ";
+        for (int j = 0; j < train_source[i].size(); ++j) {
+          cerr << train_source[i][j] << " ";
+        }
+        cerr << endl;
+        cerr << d.toLongString() << endl;
+        cerr << "derivation: " << d.toString() << endl;
+        cerr << "target: " << train_target[i] << endl;
+      }
+      assert (d.toString() == train_target[i]);
+    }
     train_derivations.push_back(derivations);
   }
+  cerr << train_source.size() << "/" << train_source.size() << "\n";
 
+  cerr << "Removing unreachable compounds..." << endl;
   // Remove any unreachable references from the training data
   for (int i = 0; i < train_source.size(); ++i) {
+    cerr << i << "/" << train_source.size() << "\r";
     if (train_derivations[i].size() == 0) { 
       train_source.erase(train_source.begin() + i);
       train_target.erase(train_target.begin() + i); 
@@ -168,13 +188,20 @@ int main(int argc, char** argv) {
       i--;
     }
   }
+  cerr << train_source.size() << "/" << train_source.size() << "\n";
 
   adept::Stack stack;
+  cerr << "Initializing model..." << endl;
   crf model(&stack, &scorer);
-  noise_model noise_generator(&fwd_ttable);
+  //noise_model noise_generator(&fwd_ttable);
 
   // Preload features into the CRF to avoid adept errors
+  cerr << "Preloading features..." << endl;
   for (int i = 0; i < train_source.size(); ++i) {
+    cerr << i << "/" << train_source.size() << "\r";
+    for (int j = 0; j < train_source[i].size(); ++j) {
+      model.add_feature(train_source[i][j] + "_to_null");
+    }
     for (Derivation& derivation : train_derivations[i]) {
       for (string suffix : derivation.suffixes) {
         scorer.suffix_list.insert(suffix);
@@ -185,8 +212,9 @@ int main(int argc, char** argv) {
       }
     }
   }
+  cerr << train_source.size() << "/" << train_source.size() << "\n";
 
-  vector<vector<Derivation> > noise_samples; 
+  /*vector<vector<Derivation> > noise_samples; 
   for (int i = 0; i < train_source.size(); ++i) {
     vector<Derivation> samples;
     for (int j = 0; j < num_noise_samples; ++j) {
@@ -194,32 +222,30 @@ int main(int argc, char** argv) {
       samples.push_back(sample);
     }
     noise_samples.push_back(samples);
-  }
+  }*/
 
   assert (train_source.size() == train_target.size());
   assert (train_source.size() == train_derivations.size());
   cerr << train_source.size() << " reachable examples remain." << endl;
 
+  /*train_derivations[0].erase(train_derivations[0].begin());
   train_derivations[0].erase(train_derivations[0].begin());
-  train_derivations[0].erase(train_derivations[0].begin());
-  train_derivations[0].erase(train_derivations[0].begin());
-  //train_derivations[0].erase(train_derivations[0].begin() + 1);
+  train_derivations[1].erase(train_derivations[1].begin());
+  train_derivations[1].erase(train_derivations[1].begin() + 1);*/
+  /*train_derivations[2].erase(train_derivations[2].begin());
+  train_derivations[2].erase(train_derivations[2].begin());
+  train_derivations[2].erase(train_derivations[2].begin());
+  train_derivations[4].erase(train_derivations[4].begin());*/
 
   adouble loss;
-  vector<Derivation> chosen_derivations = sample_derivations(&model, train_source, train_derivations);
+  /*vector<Derivation> chosen_derivations = sample_derivations(&model, train_source, train_derivations);
   assert (chosen_derivations.size() == train_source.size());
   for (int i = 0; i < train_source.size(); ++i) {
     for (int j = 0; j < train_source[i].size(); ++j) {
       //cerr << train_source[i][j] << " "; 
     }
     //cerr << "||| " << chosen_derivations[i].toLongString() << endl;
-  }
-
-  for (int i = 0; i < train_source.size(); ++i) {
-    for (int j = 0; j < train_derivations[i].size(); ++j) {
-      cerr << "Training derivation: " << train_derivations[i][j].toLongString() << endl;
-    }
-  }
+  }*/
 
   loss = 0.0;
   /*for (unsigned i = 0; i < train_source.size(); ++i) {
@@ -228,11 +254,14 @@ int main(int argc, char** argv) {
   loss += model.l2penalty(lambda);
   cerr << "Iteration " << 0 << " loss: " << loss << endl;*/
 
-  for (unsigned iter = 0; iter < 100; ++iter) {
+  cerr << "Training..." << endl;
+  for (unsigned iter = 0; iter < 10; ++iter) {
     //loss = model.train(train_source, chosen_derivations, noise_samples, eta, lambda);
-    loss = model.train(train_source, chosen_derivations, eta, lambda);
+    //loss = model.train(train_source, chosen_derivations, eta, lambda);
     //loss = model.train(train_source, train_derivations, eta, lambda);
+    loss = model.train_nobatch(train_source, train_derivations, eta, lambda);
     cerr << "Iteration " << iter + 1 << " loss: " << loss << endl;
+    cerr.flush();
   }
 
   cerr << "Final loss: " << loss << endl;
@@ -242,9 +271,17 @@ int main(int argc, char** argv) {
       cerr << "  " << kvp.first << ": " << kvp.second << endl;
     }
   }
+  cerr.flush();
 
   for (int j = 0; j < train_source.size(); ++j) {
     vector<string>& input = train_source[j];
+    double z = model.partition_function(input).value();
+    cout << j << " ||| ";
+    for (int k = 0; k < train_source[j].size(); ++k) {
+      cout << train_source[j][k] << " ";
+    }
+    cout << "||| " << train_target[j];
+    cout << " ||| partition function: " << z << endl;
 
     for (Derivation& gold : train_derivations[j]) {
       map<string, double> features = scorer.score(input, gold);
@@ -252,7 +289,7 @@ int main(int argc, char** argv) {
       cout << j << " ||| G ||| " << gold.toLongString(features) << "||| " << score << endl;
     }
 
-    vector<tuple<double, Derivation> > kbest = model.predict(input, 10); 
+    vector<tuple<double, Derivation> > kbest = model.predict(input, 20); 
     for (int i = 0; i < kbest.size(); ++i) {
       double score = get<0>(kbest[i]);
       Derivation& derivation = get<1>(kbest[i]);
@@ -260,5 +297,6 @@ int main(int argc, char** argv) {
       cout << j << " ||| " <<  i << " ||| ";
       cout << derivation.toLongString(features) << "||| " << score << endl;
     }
+    cout.flush();
   }
 }

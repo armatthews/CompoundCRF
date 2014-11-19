@@ -3,6 +3,8 @@
 #include "crf.h"
 using namespace std;
 
+const bool use_adadelta = true;
+
 // returns log(a * exp(x) + b * exp(y))
 adouble log_sum_exp(adouble x, adouble y, adouble a = 1.0, adouble b = 1.0) {
   adouble m = max(x, y);
@@ -247,34 +249,79 @@ adouble crf::l2penalty(const double lambda) {
   return res;
 }
 
+adouble crf::train_nobatch(const vector<vector<string> >& x, const vector<vector<Derivation> >& y,
+    double learning_rate, double l2_strength) {
+  assert(x.size() == y.size());
+  adouble total_log_loss = 0.0;
+  for (unsigned i = 0; i < x.size(); ++i) {
+    cerr << i << "/" << x.size() << "\r";
+    cerr.flush();
+    adouble log_loss = 0.0;
+    stack->new_recording();
+    adouble d = partition_function(x[i]);
+    /*vector<adouble> scores;
+    for (unsigned int j = 0; j < y[i].size(); ++j) {
+      scores.push_back(score(x[i], y[i][j]));
+    }
+    adouble log_total = log_sum_exp(scores);
+    log_loss -= log_total - d;*/
+
+    adouble score_sum = 0.0;
+    for (unsigned int j = 0; j < y[i].size(); ++j) {
+      score_sum += exp(score(x[i], y[i][j]));
+    }
+    log_loss -= log(score_sum) - d;
+    log_loss += l2penalty(l2_strength);
+
+    log_loss.set_gradient(1.0);
+    stack->compute_adjoint();
+    for (auto& fv : weights) {
+      const double g = fv.second.get_gradient();
+      double delta;
+      if (use_adadelta) {
+        historical_gradients[fv.first] = rho * historical_gradients[fv.first] + (1 - rho) * g * g;
+        delta = -g * sqrt(historical_deltas[fv.first]) / sqrt(historical_gradients[fv.first]);
+        historical_deltas[fv.first] = rho * historical_deltas[fv.first] + (1 - rho) * delta * delta;
+      }
+      else {
+        delta = -g * learning_rate;
+      }
+      weights[fv.first] += delta;
+    }
+    total_log_loss += log_loss;
+  }
+  cerr << x.size() << "/" << x.size() << endl;
+
+  return total_log_loss;
+}
+
 adouble crf::train(const vector<vector<string> >& x, const vector<vector<Derivation> >& y,
     double learning_rate, double l2_strength) {
   assert(x.size() == y.size());
   adouble log_loss = 0.0;
   stack->new_recording();
   for (unsigned i = 0; i < x.size(); ++i) {
+    cerr << i << "/" << x.size() << "\r";
     adouble d = partition_function(x[i]);
-    vector<adouble> scores;
+    /*vector<adouble> scores;
     for (unsigned int j = 0; j < y[i].size(); ++j) {
-      scores.push_back(2 * score(x[i], y[i][j]));
+      scores.push_back(score(x[i], y[i][j]));
     }
     adouble log_total = log_sum_exp(scores);
+    log_loss -= log_total - d;*/
 
-    //adouble slow = slow_partition_function(x[i], weights);
-    //assert(abs(d - slow) < 0.0001);
+    adouble score_sum = 0.0;
     for (unsigned int j = 0; j < y[i].size(); ++j) {
-      adouble n = score(x[i], y[i][j]);
-      assert(n < d);
-      adouble log_prob = n - d;
-      adouble weight = scores[j] - log_total;
-      log_loss -= log_prob + weight;
+      score_sum += exp(score(x[i], y[i][j]));
     }
+    log_loss -= log(score_sum) - d;
   }
+  cerr << x.size() << "/" << x.size() << "\r";
+   
   log_loss += l2penalty(l2_strength);
 
   log_loss.set_gradient(1.0);
   stack->compute_adjoint();
-  const bool use_adadelta = true;
   for (auto& fv : weights) {
     const double g = fv.second.get_gradient();
     double delta;
@@ -310,7 +357,6 @@ adouble crf::train(const vector<vector<string> >& x, const vector<Derivation>& y
 
   log_loss.set_gradient(1.0);
   stack->compute_adjoint();
-  const bool use_adadelta = false;
   for (auto& fv : weights) {
     const double g = fv.second.get_gradient();
     double delta;
@@ -340,7 +386,6 @@ adouble crf::train(const vector<vector<string> >& x, const vector<Derivation>& y
 
   log_loss.set_gradient(1.0);
   stack->compute_adjoint();
-  const bool use_adadelta = true;
   for (auto& fv : weights) {
     const double g = fv.second.get_gradient();
     double delta;
