@@ -20,16 +20,17 @@ vector<vector<string> > cross(vector<vector<string> > vectors ) {
     return cross_product;
   }
 
-  vector<int> indices(vectors.size(), 0);
+  vector<unsigned> indices(vectors.size(), 0);
   while (true) {
     vector<string> item;
     item.reserve(vectors.size());
-    for (int i = 0; i < vectors.size(); ++i) {
+    for (unsigned i = 0; i < vectors.size(); ++i) {
       item.push_back(vectors[i][indices[i]]);
     }
     cross_product.push_back(item);
 
-    for (int i = vectors.size() - 1; i >= 0; --i) {
+    for (unsigned i = vectors.size(); i > 0;) {
+      --i;
       indices[i]++;
       if (indices[i] == vectors[i].size()) {
         if (i != 0) {
@@ -49,7 +50,7 @@ vector<vector<string> > cross(vector<vector<string> > vectors ) {
 unsigned int popCount(unsigned int i) {
   unsigned int r = 0;
   unsigned int one = 1;
-  for (int b = 0; b < 8 * sizeof(unsigned int); ++b) {
+  for (unsigned b = 0; b < 8 * sizeof(unsigned int); ++b) {
     unsigned int mask = one << b;
     if (i & mask) {
       ++r;
@@ -78,7 +79,7 @@ string Derivation::toLongString(const map<string, double>& features) {
   assert(suffixes.size() == translations.size());
 
   ostringstream ss;
-  for (int i = 0; i < translations.size(); ++i) {
+  for (unsigned i = 0; i < translations.size(); ++i) {
     if (translations[i].size() > 0) {
       ss << translations[i] << "+" << suffixes[i] << " ";
     }

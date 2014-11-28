@@ -17,14 +17,14 @@ adouble log_sum_exp(vector<adouble> v) {
     return -numeric_limits<double>::infinity();
   }
   adouble m = v[0];
-  for (int i = 1; i < v.size(); ++i) {
+  for (unsigned i = 1; i < v.size(); ++i) {
     if (v[i] > m) {
       m = v[i];
     }
   }
 
   adouble sum = 0.0;
-  for (int i = 0; i < v.size(); ++i) {
+  for (unsigned i = 0; i < v.size(); ++i) {
     sum += exp(v[i] - m);
   }
   return m + log(sum);
@@ -82,7 +82,7 @@ adouble crf::partition_function(const vector<string>& x) {
   adouble z = 0.0;
   vector<adouble> non_null_scores;
   vector<adouble> null_scores;
-  for (int i = 0; i < x.size(); ++i) {
+  for (unsigned i = 0; i < x.size(); ++i) {
     const string& source = x[i];
     adouble non_null_score = word_partition_function(source);
     adouble null_score;
@@ -106,11 +106,12 @@ adouble crf::partition_function(const vector<string>& x) {
 
   vector<adouble> final_scores;
   const int factorial[] = {1, 1, 2, 6, 24, 120};
+  const unsigned one = 1;
   // Loop over combinations of NULLs and non-NULLs
-  for (unsigned int i = 0; i < (1 << x.size()); ++i) {
+  for (unsigned i = 0; i < (one << x.size()); ++i) {
     adouble score = 0.0;
     vector<int> indices;
-    for (int j = 0; j < x.size(); ++j) {
+    for (unsigned j = 0; j < x.size(); ++j) {
       if (i & (1 << j)) {
         indices.push_back(j);
       }
@@ -119,9 +120,9 @@ adouble crf::partition_function(const vector<string>& x) {
     vector<adouble> permutation_scores;
     permutation_scores.reserve(factorial[popCount(i)]);
     do {
-      map<string, double> permutation_features;// = scorer->score_permutation("", "");
+      map<string, double> permutation_features = scorer->score_permutation(x, indices);
       adouble permutation_score = dot(permutation_features, weights);
-      for (int j = 0; j < x.size(); ++j) {
+      for (unsigned j = 0; j < x.size(); ++j) {
         if (i & (1 << j)) {
           permutation_score += non_null_scores[j];
         }
@@ -141,7 +142,7 @@ adouble crf::partition_function(const vector<string>& x) {
 
 adouble crf::slow_partition_function(const vector<string>& x, const map<string, adouble>& weights) {
   vector<vector<string> > candidate_translations;
-  for (int i = 0; i < x.size(); ++i) {
+  for (unsigned i = 0; i < x.size(); ++i) {
     vector<string> translations;
     translations.push_back("");
     for (auto& kvp : scorer->fwd_ttable->getTranslations(x[i])) {
@@ -159,7 +160,7 @@ adouble crf::slow_partition_function(const vector<string>& x, const map<string, 
     // Note that we remove indices coresponding to NULL translations
     // since their ordering does not affect the output.
     vector<int> indices;
-    for (int i = 0; i < translations.size(); ++i) {
+    for (unsigned i = 0; i < translations.size(); ++i) {
       if (translations[i].size() != 0) {
         indices.push_back(i);
       }
@@ -171,7 +172,7 @@ adouble crf::slow_partition_function(const vector<string>& x, const map<string, 
     }*/
 
     vector<vector<string> > candidate_suffixes;
-    for (int i = 0; indices.size() > 0 && i < indices.size() - 1; ++i) {
+    for (unsigned i = 0; indices.size() > 0 && i < indices.size() - 1; ++i) {
       vector<string> suffixes;
       for (string suffix : scorer->suffix_list) {
         suffixes.push_back(suffix);
@@ -195,7 +196,7 @@ adouble crf::slow_partition_function(const vector<string>& x, const map<string, 
     do { 
       for (vector<string> chosen_suffixes : cross(candidate_suffixes)) {
         vector<string> suffixes(translations.size(), string(""));
-        for (int i = 0; i < indices.size(); ++i) {
+        for (unsigned i = 0; i < indices.size(); ++i) {
           suffixes[indices[i]] = chosen_suffixes[i];
         } 
 
@@ -218,7 +219,7 @@ adouble crf::slow_partition_function(const vector<string>& x, const map<string, 
 adouble crf::score_noise(const vector<string>& x, const Derivation& y) {
   adouble score = 0.0;
   assert(x.size() == y.translations.size());
-  for (int i = 0; i < x.size(); ++i) {
+  for (unsigned i = 0; i < x.size(); ++i) {
     double s;
     bool found = scorer->fwd_ttable->getScore(x[i], y.translations[i], s);
     s = found ? s : -10.0;
@@ -421,17 +422,17 @@ adouble crf::train(const vector<vector<string> >& x, const vector<Derivation>& y
 
 void crf::add_feature(string name) {
   if (weights.find(name) == weights.end()) {
-    weights[name] = 0.0;
+    weights[name] = 1.0;
     historical_deltas[name] = 1.0;
     historical_gradients[name] = 1.0;
   }
 }
 
-vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, int k) {
+vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, unsigned k) {
   scorer->suffix_list.insert("");
   // First we find the k-best (translation, suffix) pairs for each index in x
   vector<vector<tuple<adouble, string, string> > > best_pieces;
-  for (int i = 0; i < x.size(); ++i) {
+  for (unsigned i = 0; i < x.size(); ++i) {
     vector<tuple<adouble, string, string> > local_best_pieces;
     local_best_pieces.reserve(k + 1);
 
@@ -475,7 +476,7 @@ vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, int k) 
   vector<int> start(x.size(), 0);
   assert(start.size() == x.size()); 
   adouble start_score = 0.0;
-  for (int i = 0; i < x.size(); ++i) {
+  for (unsigned i = 0; i < x.size(); ++i) {
     assert(best_pieces[i].size() > 0);
     start_score += get<0>(best_pieces[i][0]);
   }
@@ -490,7 +491,7 @@ vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, int k) 
 
     Derivation d;
     assert(d.translations.size() == d.suffixes.size());
-    for (int i = 0; i < indices.size(); ++i) {
+    for (unsigned i = 0; i < indices.size(); ++i) {
       auto& piece = best_pieces[i][indices[i]];
       string& translation = get<1>(piece);
       string& suffix = get<2>(piece);
@@ -506,7 +507,7 @@ vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, int k) 
     kbest.push_back(make_tuple(score.value(), d));
 
     assert (indices.size() == x.size());
-    for (int i = 0; i < indices.size(); ++i) {
+    for (unsigned i = 0; i < indices.size(); ++i) {
       vector<int> new_indices(indices.begin(), indices.end());
       assert (new_indices.size() == indices.size());
       if (new_indices[i] + 1 < best_pieces[i].size()) {

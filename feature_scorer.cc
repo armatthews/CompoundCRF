@@ -56,6 +56,18 @@ map<string, double> feature_scorer::score_suffix(const string& root, const strin
 map<string, double> feature_scorer::score_permutation(const vector<std::string>& source,
     const vector<int>& permutation) {
   map<string, double> features;
+  bool monotone = true;
+  if (permutation.size() > 0) {
+    int last = permutation[0];
+    for (unsigned i = 1; i < permutation.size(); ++i) {
+      if (permutation[i] < last) {
+        monotone = false;
+        break;
+      }
+      last = permutation[i];
+    }
+  }
+  features["monotone"] = monotone ? 1.0 : 0.0;
   return features;
 }
 
@@ -75,7 +87,7 @@ map<string, double> feature_scorer::score(const vector<string>& source,
     features[kvp.first] += kvp.second;
   }
 
-  for (int i = 0; i < translations.size(); ++i) {
+  for (unsigned i = 0; i < translations.size(); ++i) {
     for (auto& kvp : score_translation(source[i], translations[i])) {
       features[kvp.first] += kvp.second;
     }

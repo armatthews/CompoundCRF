@@ -19,13 +19,13 @@ void process(const vector<string>& english, string german,
     vector<int>& indices = derivation.permutation;
 
     // Output the translations and suffixes
-    for (int i = 0; i < indices.size(); ++i) {
+    for (unsigned i = 0; i < indices.size(); ++i) {
       cerr << translations[indices[i]] << "+" << suffixes[i] << " ";
     }
     cerr << "||| ";
 
     // Output the permutation
-    for (int i = 0; i < indices.size(); ++i) {
+    for (unsigned i = 0; i < indices.size(); ++i) {
       cerr << indices[i] << " ";
     }
     cerr << "||| ";

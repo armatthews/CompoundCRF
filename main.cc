@@ -53,7 +53,7 @@ void read_input_file(string filename, vector<vector<string> >& X, vector<string>
 Derivation sample_derivation(crf* model, const vector<string>& input, const vector<Derivation>& derivations) {
   vector<adouble> scores(derivations.size(), 0.0);
   adouble sum = 0.0;
-  for (int i = 0; i < derivations.size(); ++i) {
+  for (unsigned i = 0; i < derivations.size(); ++i) {
     adouble score = model->score(input, derivations[i]);
     score = exp(score);
     scores[i] = score;
@@ -61,7 +61,7 @@ Derivation sample_derivation(crf* model, const vector<string>& input, const vect
   }
 
   adouble r = sum * (double)rand() / RAND_MAX;
-  for (int i = 0; i < derivations.size(); ++i) {
+  for (unsigned i = 0; i < derivations.size(); ++i) {
     if (r < scores[i]) {
       return derivations[i];
     }
@@ -75,7 +75,7 @@ vector<Derivation> sample_derivations(crf* model, const vector<vector<string> >&
   assert (inputs.size() == derivations.size());
 
   vector<Derivation> sampled_derivations;
-  for (int i = 0; i < inputs.size(); ++i) { 
+  for (unsigned i = 0; i < inputs.size(); ++i) { 
     const Derivation& sample = sample_derivation(model, inputs[i], derivations[i]);
     sampled_derivations.push_back(sample);
   }
@@ -106,6 +106,7 @@ void test(int argc, char** argv) {
   model.add_feature("rev_score");
   model.add_feature("tgt_null");
   model.add_feature("null_score");
+  model.add_feature("monotone");
   model.add_feature("suffix_n"); 
   model.add_feature("suffix_");
   model.add_feature("tomato_to_null");
@@ -157,13 +158,13 @@ int main(int argc, char** argv) {
 
   // Analyze the target side of the training corpus into lists of possible derivations
   cerr << "Analyzing training data..." << endl;
-  for (int i = 0; i < train_source.size(); ++i) {
+  for (unsigned i = 0; i < train_source.size(); ++i) {
     cerr << i << "/" << train_source.size() << "\r";
     vector<Derivation> derivations = analyzer.analyze(train_source[i], train_target[i]);
     for (Derivation& d : derivations) {
       if (d.toString() != train_target[i]) {
         cerr << "source: ";
-        for (int j = 0; j < train_source[i].size(); ++j) {
+        for (unsigned j = 0; j < train_source[i].size(); ++j) {
           cerr << train_source[i][j] << " ";
         }
         cerr << endl;
@@ -179,7 +180,7 @@ int main(int argc, char** argv) {
 
   cerr << "Removing unreachable compounds..." << endl;
   // Remove any unreachable references from the training data
-  for (int i = 0; i < train_source.size(); ++i) {
+  for (unsigned i = 0; i < train_source.size(); ++i) {
     cerr << i << "/" << train_source.size() << "\r";
     if (train_derivations[i].size() == 0) { 
       train_source.erase(train_source.begin() + i);
@@ -197,9 +198,9 @@ int main(int argc, char** argv) {
 
   // Preload features into the CRF to avoid adept errors
   cerr << "Preloading features..." << endl;
-  for (int i = 0; i < train_source.size(); ++i) {
+  for (unsigned i = 0; i < train_source.size(); ++i) {
     cerr << i << "/" << train_source.size() << "\r";
-    for (int j = 0; j < train_source[i].size(); ++j) {
+    for (unsigned j = 0; j < train_source[i].size(); ++j) {
       model.add_feature(train_source[i][j] + "_to_null");
     }
     for (Derivation& derivation : train_derivations[i]) {
@@ -273,11 +274,11 @@ int main(int argc, char** argv) {
   }
   cerr.flush();
 
-  for (int j = 0; j < train_source.size(); ++j) {
+  for (unsigned j = 0; j < train_source.size(); ++j) {
     vector<string>& input = train_source[j];
     double z = model.partition_function(input).value();
     cout << j << " ||| ";
-    for (int k = 0; k < train_source[j].size(); ++k) {
+    for (unsigned k = 0; k < train_source[j].size(); ++k) {
       cout << train_source[j][k] << " ";
     }
     cout << "||| " << train_target[j];
@@ -290,7 +291,7 @@ int main(int argc, char** argv) {
     }
 
     vector<tuple<double, Derivation> > kbest = model.predict(input, 20); 
-    for (int i = 0; i < kbest.size(); ++i) {
+    for (unsigned i = 0; i < kbest.size(); ++i) {
       double score = get<0>(kbest[i]);
       Derivation& derivation = get<1>(kbest[i]);
       map<string, double> features = scorer.score(input, derivation);

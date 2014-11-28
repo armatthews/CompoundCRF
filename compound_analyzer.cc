@@ -16,12 +16,12 @@ bool compound_analyzer::decompose(string compound, const vector<string>& pieces,
     vector<int> permutation, vector<string>& suffixes) {
   suffixes.clear();
   suffixes.resize(pieces.size());
-  for (int i = 0; i < suffixes.size(); ++i) {
+  for (unsigned i = 0; i < suffixes.size(); ++i) {
     suffixes[i] = "";
   }
 
   string remainder = compound;
-  for (int i = 0; i < permutation.size(); ++i) {
+  for (unsigned i = 0; i < permutation.size(); ++i) {
     int j = permutation[i];
     int location = remainder.find(pieces[j]);
     if (location == string::npos) {
@@ -80,7 +80,7 @@ vector<Derivation> compound_analyzer::analyze(const vector<string>& english, str
   // Output the list of candidate translations for each english word
   // just for funsies
   if (verbose) {
-    for (int i = 0; i < english.size(); ++i) {
+    for (unsigned i = 0; i < english.size(); ++i) {
       cout << english[i] << endl;
       for (string t : candidate_translations[i]) {
         cout << "\t" << (t.size() > 0 ? t : "(null)") << endl;
@@ -95,7 +95,7 @@ vector<Derivation> compound_analyzer::analyze(const vector<string>& english, str
     // Note that we remove indices coresponding to NULL translations
     // since their ordering does not affect the output.
     vector<int> indices;
-    for (int i = 0; i < translations.size(); ++i) {
+    for (unsigned i = 0; i < translations.size(); ++i) {
       if (translations[i] != "") {
         indices.push_back(i);
       }

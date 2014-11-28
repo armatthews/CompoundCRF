@@ -31,7 +31,7 @@ public:
   adouble train(const vector<vector<string>>& x, const vector<Derivation>& z, const vector<vector<Derivation> >& noise_samples, double learning_rate, double l2_strength);
   void add_feature(string name);
 
-  vector<tuple<double, Derivation> > predict(const vector<string>& x, int k=1);
+  vector<tuple<double, Derivation> > predict(const vector<string>& x, unsigned k=1);
 
 //private:
   map<string, adouble> weights;
