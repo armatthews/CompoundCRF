@@ -422,7 +422,7 @@ adouble crf::train(const vector<vector<string> >& x, const vector<Derivation>& y
 
 void crf::add_feature(string name) {
   if (weights.find(name) == weights.end()) {
-    weights[name] = 1.0;
+    weights[name] = 0.0;
     historical_deltas[name] = 1.0;
     historical_gradients[name] = 1.0;
   }
