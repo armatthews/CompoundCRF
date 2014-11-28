@@ -1,5 +1,6 @@
 #include <cassert>
 #include <iostream>
+#include <algorithm>
 #include "crf.h"
 using namespace std;
 
@@ -105,19 +106,34 @@ adouble crf::partition_function(const vector<string>& x) {
 
   vector<adouble> final_scores;
   const int factorial[] = {1, 1, 2, 6, 24, 120};
+  // Loop over combinations of NULLs and non-NULLs
   for (unsigned int i = 0; i < (1 << x.size()); ++i) {
     adouble score = 0.0;
+    vector<int> indices;
     for (int j = 0; j < x.size(); ++j) {
       if (i & (1 << j)) {
-        score += non_null_scores[j];
-      }
-      else {
-        score += null_scores[j];
+        indices.push_back(j);
       }
     }
+
+    vector<adouble> permutation_scores;
+    permutation_scores.reserve(factorial[popCount(i)]);
+    do {
+      map<string, double> permutation_features;// = scorer->score_permutation("", "");
+      adouble permutation_score = dot(permutation_features, weights);
+      for (int j = 0; j < x.size(); ++j) {
+        if (i & (1 << j)) {
+          permutation_score += non_null_scores[j];
+        }
+        else {
+          permutation_score += null_scores[j];
+        }
+      }
+      permutation_scores.push_back(permutation_score);
+    } while (next_permutation(indices.begin(), indices.end()));
     assert(popCount(i) <= 5);
-    score += log(factorial[popCount(i)]);
-    final_scores.push_back(score);
+    //score += log(factorial[popCount(i)]);
+    final_scores.push_back(log_sum_exp(permutation_scores));
   }
 
   return log_sum_exp(final_scores);

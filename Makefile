@@ -7,10 +7,10 @@ all: crf split
 
 CRF_OBJECTS = main.o conll.o crf.o utils.o ttable.o feature_scorer.o compound_analyzer.o noise_model.o
 crf: $(CRF_OBJECTS)
-	$(CC) $(LFLAGS) $(CRF_OBJECTS) -o crf
+	$(CC) $(CRF_OBJECTS) $(LFLAGS) -o crf
 
 split: split.o ttable.o utils.o feature_scorer.o compound_analyzer.o
-	$(CC) $(LFLAGS) split.o ttable.o utils.o feature_scorer.o compound_analyzer.o -o split
+	$(CC) split.o ttable.o utils.o feature_scorer.o compound_analyzer.o $(LFLAGS) -o split
 
 split.o: split.cc utils.h ttable.h feature_scorer.h compound_analyzer.h
 	$(CC) $(CFLAGS) split.cc
