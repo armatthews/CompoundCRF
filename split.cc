@@ -8,6 +8,7 @@
 #include "compound_analyzer.h"
 #include "feature_scorer.h"
 #include "utils.h"
+#include "derivation.h"
 using namespace std;
 
 void process(const vector<string>& english, string german,

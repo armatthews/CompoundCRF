@@ -5,6 +5,8 @@
 #include <string>
 #include "ttable.h"
 #include "utils.h"
+#include "derivation.h"
+
 using std::string;
 using std::vector;
 using std::unordered_set;

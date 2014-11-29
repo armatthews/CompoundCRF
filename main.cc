@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
   }
 
   // Quick sanity check
-  test(argc, argv);
+  test(argc, argv); 
 
   // read training data
   vector<vector<string> > train_source;
@@ -198,6 +198,11 @@ int main(int argc, char** argv) {
 
   // Preload features into the CRF to avoid adept errors
   cerr << "Preloading features..." << endl;
+  model.add_feature("null_score");
+  model.add_feature("fwd_score");
+  model.add_feature("rev_score");
+  model.add_feature("tgt_null");
+  model.add_feature("monotone");
   for (unsigned i = 0; i < train_source.size(); ++i) {
     cerr << i << "/" << train_source.size() << "\r";
     for (unsigned j = 0; j < train_source[i].size(); ++j) {
@@ -206,10 +211,7 @@ int main(int argc, char** argv) {
     for (Derivation& derivation : train_derivations[i]) {
       for (string suffix : derivation.suffixes) {
         scorer.suffix_list.insert(suffix);
-      }
-      map<string, double> features = scorer.score(train_source[i], derivation);
-      for (auto& kvp : features) {
-        model.add_feature(kvp.first);
+        model.add_feature("suffix_" + suffix);
       }
     }
   }

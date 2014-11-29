@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <sstream>
 #include <cassert>
 #include "utils.h"
 using namespace std;
@@ -57,50 +56,4 @@ unsigned int popCount(unsigned int i) {
     }
   }
   return r;
-}
-
-string Derivation::toString() {
-  assert(suffixes.size() == translations.size());
-  ostringstream ss;
-  for (int i : permutation) {
-    string root = translations[i];
-    string suffix = suffixes[i];
-    ss << root << suffix;
-  }
-  return ss.str();
-}
-
-string Derivation::toLongString() {
-  map<string, double> features;
-  return toLongString(features);
-}
-
-string Derivation::toLongString(const map<string, double>& features) {
-  assert(suffixes.size() == translations.size());
-
-  ostringstream ss;
-  for (unsigned i = 0; i < translations.size(); ++i) {
-    if (translations[i].size() > 0) {
-      ss << translations[i] << "+" << suffixes[i] << " ";
-    }
-    else {
-      //assert(suffixes[i].size() == 0);
-      if (suffixes[i].size() == 0) {
-        ss << "NULL ";
-      }
-      else {
-        ss << "NULL+" << suffixes[i] << " ";
-      }
-    }
-  }
-  ss << "||| ";
-  for (int i : permutation) {
-    ss << i << " ";
-  }
-  ss << "||| ";
-  for (auto& kvp : features) {
-    ss << kvp.first << "=" << kvp.second << " ";
-  }
-
-  return ss.str();
 }

@@ -5,17 +5,17 @@ LFLAGS = -Wall -ladept $(DEBUG)
 
 all: crf split
 
-CRF_OBJECTS = main.o conll.o crf.o utils.o ttable.o feature_scorer.o compound_analyzer.o noise_model.o
+CRF_OBJECTS = main.o conll.o crf.o utils.o ttable.o feature_scorer.o compound_analyzer.o noise_model.o derivation.o
 crf: $(CRF_OBJECTS)
 	$(CC) $(CRF_OBJECTS) $(LFLAGS) -o crf
 
-split: split.o ttable.o utils.o feature_scorer.o compound_analyzer.o
-	$(CC) split.o ttable.o utils.o feature_scorer.o compound_analyzer.o $(LFLAGS) -o split
+split: split.o ttable.o utils.o feature_scorer.o compound_analyzer.o derivation.o
+	$(CC) split.o ttable.o utils.o feature_scorer.o compound_analyzer.o derivation.o $(LFLAGS) -o split
 
-split.o: split.cc utils.h ttable.h feature_scorer.h compound_analyzer.h
+split.o: split.cc utils.h ttable.h feature_scorer.h compound_analyzer.h derivation.h
 	$(CC) $(CFLAGS) split.cc
 
-noise_model.o: noise_model.cc noise_model.h ttable.h utils.h
+noise_model.o: noise_model.cc noise_model.h ttable.h utils.h derivation.h
 	$(CC) $(CFLAGS) noise_model.cc
 
 ttable.o: ttable.cc ttable.h utils.h
@@ -24,16 +24,19 @@ ttable.o: ttable.cc ttable.h utils.h
 utils.o: utils.cc utils.h
 	$(CC) $(CFLAGS) utils.cc
 
-feature_scorer.o: feature_scorer.cc ttable.h feature_scorer.h
+derivation.o: derivation.cc derivation.h
+	$(CC) $(CFLAGS) derivation.cc
+
+feature_scorer.o: feature_scorer.cc ttable.h feature_scorer.h derivation.h
 	$(CC) $(CFLAGS) feature_scorer.cc
 
-compound_analyzer.o: compound_analyzer.cc compound_analyzer.h utils.h ttable.h
+compound_analyzer.o: compound_analyzer.cc compound_analyzer.h utils.h ttable.h derivation.h
 	$(CC) $(CFLAGS) compound_analyzer.cc
 
-main.o: main.cc crf.h utils.h feature_scorer.h compound_analyzer.h noise_model.h
+main.o: main.cc crf.h utils.h feature_scorer.h compound_analyzer.h noise_model.h derivation.h
 	$(CC) $(CFLAGS) main.cc
 
-crf.o: crf.cc crf.h utils.h feature_scorer.h
+crf.o: crf.cc crf.h utils.h feature_scorer.h derivation.h
 	$(CC) $(CFLAGS) crf.cc
 
 conll.o:

@@ -2,6 +2,7 @@
 #include <string>
 #include "ttable.h"
 #include "utils.h"
+#include "derivation.h"
 using std::string;
 using std::vector;
 

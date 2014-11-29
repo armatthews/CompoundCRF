@@ -4,6 +4,7 @@
 #include <map>
 #include <tuple>
 #include "adept.h"
+#include "derivation.h"
 #include "utils.h"
 #include "feature_scorer.h"
 using std::string;

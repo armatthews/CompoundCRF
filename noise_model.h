@@ -3,6 +3,7 @@
 #include <map>
 #include "ttable.h"
 #include "utils.h"
+#include "derivation.h"
 #include "adept.h"
 using std::map;
 using std::vector;
