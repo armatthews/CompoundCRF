@@ -12,6 +12,9 @@
 #include <signal.h>
 #include <unistd.h>
 
+#include <boost/archive/text_oarchive.hpp>
+#include <boost/archive/text_iarchive.hpp>
+
 #include "adept.h"
 #include "crf.h"
 #include "feature_scorer.h"
@@ -93,19 +96,27 @@ void exception_handler(int sig) {
 }
 
 void test(int argc, char** argv) {
+  adept::Stack stack;
+
   ttable fwd_ttable;
   ttable rev_ttable;
   fwd_ttable.load(argv[2]);
   rev_ttable.load(argv[3]);
+  vocabulary lm_vocab = vocabulary::ReadFromFile(argv[4]);
+  NeuralLM lm = NeuralLM::ReadFromFile(argv[5]);
   feature_scorer scorer(&fwd_ttable, &rev_ttable);
   compound_analyzer analyzer(&fwd_ttable);
+  scorer.lm_vocab = &lm_vocab;
+  scorer.lm = &lm;
 
-  adept::Stack stack;
   crf model(&stack, &scorer);
+  model.add_feature("length");
   model.add_feature("fwd_score");
   model.add_feature("rev_score");
   model.add_feature("tgt_null");
   model.add_feature("null_score");
+  model.add_feature("lm_score");
+  model.add_feature("lm_oov");
   model.add_feature("monotone");
   model.add_feature("suffix_n"); 
   model.add_feature("suffix_");
@@ -130,13 +141,14 @@ void test(int argc, char** argv) {
 
 int main(int argc, char** argv) {
   signal(SIGSEGV, exception_handler);
-  if (argc != 4) {
-    cerr << "Usage: " << argv[0] << " train.txt fwd_ttable rev_ttable\n";
+  if (argc != 6) {
+    cerr << "Usage: " << argv[0] << " train.txt fwd_ttable rev_ttable target.vcb target.nlm" << endl;
+    cerr << "where target.vcb is a character level vocabulary file" << endl;
     return 1;
   }
 
   // Quick sanity check
-  test(argc, argv); 
+  //test(argc, argv); 
 
   // read training data
   vector<vector<string> > train_source;
@@ -153,8 +165,17 @@ int main(int argc, char** argv) {
   ttable rev_ttable;
   fwd_ttable.load(argv[2]);
   rev_ttable.load(argv[3]);
+
+  cerr << "Loading LM..." << endl;
+  adept::Stack stack;
+  vocabulary lm_vocab = vocabulary::ReadFromFile(argv[4]);
+  NeuralLM lm = NeuralLM::ReadFromFile(argv[5]);
+
   feature_scorer scorer(&fwd_ttable, &rev_ttable);
   compound_analyzer analyzer(&fwd_ttable);
+
+  scorer.lm_vocab = &lm_vocab;
+  scorer.lm = &lm;
 
   // Analyze the target side of the training corpus into lists of possible derivations
   cerr << "Analyzing training data..." << endl;
@@ -190,19 +211,21 @@ int main(int argc, char** argv) {
     }
   }
   cerr << train_source.size() << "/" << train_source.size() << "\n";
-
-  adept::Stack stack;
+ 
   cerr << "Initializing model..." << endl;
   crf model(&stack, &scorer);
   //noise_model noise_generator(&fwd_ttable);
 
   // Preload features into the CRF to avoid adept errors
   cerr << "Preloading features..." << endl;
+  model.add_feature("length");
   model.add_feature("null_score");
   model.add_feature("fwd_score");
   model.add_feature("rev_score");
   model.add_feature("tgt_null");
   model.add_feature("monotone");
+  model.add_feature("lm_score");
+  model.add_feature("lm_oov");
   for (unsigned i = 0; i < train_source.size(); ++i) {
     cerr << i << "/" << train_source.size() << "\r";
     for (unsigned j = 0; j < train_source[i].size(); ++j) {
@@ -297,6 +320,7 @@ int main(int argc, char** argv) {
       double score = get<0>(kbest[i]);
       Derivation& derivation = get<1>(kbest[i]);
       map<string, double> features = scorer.score(input, derivation);
+      score = model.dot(features, model.weights).value();
       cout << j << " ||| " <<  i << " ||| ";
       cout << derivation.toLongString(features) << "||| " << score << endl;
     }

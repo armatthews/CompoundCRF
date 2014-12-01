@@ -12,24 +12,6 @@ adouble log_sum_exp(adouble x, adouble y, adouble a = 1.0, adouble b = 1.0) {
   return m + log(a * exp(x - m) + b * exp(y - m));
 }
 
-adouble log_sum_exp(vector<adouble> v) {
-  if (v.size() == 0) {
-    return -numeric_limits<double>::infinity();
-  }
-  adouble m = v[0];
-  for (unsigned i = 1; i < v.size(); ++i) {
-    if (v[i] > m) {
-      m = v[i];
-    }
-  }
-
-  adouble sum = 0.0;
-  for (unsigned i = 0; i < v.size(); ++i) {
-    sum += exp(v[i] - m);
-  }
-  return m + log(sum);
-}
-
 crf::crf(adept::Stack* stack, feature_scorer* scorer) {
   this->stack = stack;
   this->scorer = scorer;
@@ -63,10 +45,16 @@ adouble crf::word_partition_function(const string& source) {
   for (auto kvp : scorer->fwd_ttable->getTranslations(source)) {
     string target = kvp.first;
     map<string, double> translation_features = scorer->score_translation(source, target);
+    for (auto kvp : scorer->score_lm(target)) {
+      translation_features[kvp.first] += kvp.second;
+    }
 
     vector<adouble> suffix_scores;
     for (string suffix : scorer->suffix_list) {
       map<string, double> suffix_features = scorer->score_suffix(target, suffix);
+      for (auto kvp : scorer->score_lm(suffix)) {
+        suffix_features[kvp.first] += kvp.second;
+      }
       adouble suffix_score = dot(suffix_features, weights);
       suffix_scores.push_back(suffix_score);
     }

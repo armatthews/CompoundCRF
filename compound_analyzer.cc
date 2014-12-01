@@ -23,7 +23,7 @@ bool compound_analyzer::decompose(string compound, const vector<string>& pieces,
   string remainder = compound;
   for (unsigned i = 0; i < permutation.size(); ++i) {
     int j = permutation[i];
-    int location = remainder.find(pieces[j]);
+    size_t location = remainder.find(pieces[j]);
     if (location == string::npos) {
       return false;
     }

@@ -16,7 +16,7 @@ bool ttable::getScore(string source, string target, double& score) {
     score = table[source][target];
     return true;
   }
-};
+}
 
 void ttable::setScore(string source, string target, double score) {
   if (table.find(source) == table.end()) {

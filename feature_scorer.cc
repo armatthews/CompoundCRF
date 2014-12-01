@@ -1,6 +1,7 @@
 #include <cassert>
 #include <iostream>
 #include "feature_scorer.h"
+#include "utf8.h"
 using namespace std;
 
 feature_scorer::feature_scorer(ttable* fwd, ttable* rev) {
@@ -42,6 +43,7 @@ map<string, double> feature_scorer::score_translation(const string& source,
   }
   features["fwd_score"] = lexical_score(fwd_ttable, source, target);
   features["rev_score"] = lexical_score(rev_ttable, target, source);
+  features["length"] = target.length();
   return features;
 }
 
@@ -50,6 +52,7 @@ map<string, double> feature_scorer::score_suffix(const string& root, const strin
   suffix_list.insert(suffix);
   map<string, double> features;
   features["suffix_" + suffix] = 1.0;
+  features["length"] = suffix.length();
   return features;
 }
 
@@ -69,6 +72,59 @@ map<string, double> feature_scorer::score_permutation(const vector<std::string>&
   }
   features["monotone"] = monotone ? 1.0 : 0.0;
   return features;
+}
+
+map<string, double> feature_scorer::score_lm(const string& target) { 
+  adouble lm_score = 0.0;
+  int lm_oov = 0;
+  const unsigned unk = lm_vocab->convert("<unk>");
+  const unsigned bos = lm_vocab->convert("<s>");
+  const unsigned eos = lm_vocab->convert("</s>");
+  lm->reset_context(bos);
+
+  // From here down to the while loop is all
+  // boiler plate code that extracts UTF8
+  // letters from a string one at a time
+  const char* s = target.c_str();
+  char* i = (char*)s;
+  char* end = i + target.length() + 1;
+
+  unsigned char symbol[6] = {0, 0, 0, 0, 0, 0};
+  do {
+    for (int i = 0; i < 5; ++i) {
+      symbol[i] = 0;
+    }
+
+    uint32_t code = utf8::next(i, end);
+    if (code == 0) {
+      continue;
+    }
+    utf8::append(code, symbol);
+    string c = (char*)symbol;
+
+    // Now that we have a single UTF8 character,
+    // score it, then add it to the context to be
+    // re-used for the next character
+    unsigned cid = lm_vocab->lookup(c, unk);
+    if (cid != unk) {
+      lm_score += lm->log_prob(cid);
+    }
+    else {
+      lm_oov += 1;
+    }
+    lm->add_to_context(cid);
+  } while(i < end);
+
+  lm_score += lm->log_prob(eos);
+
+  map<string, double> features;
+  //features["lm_score"] = lm_score.value();
+  features["lm_oov"] = lm_oov;
+  return features;
+}
+
+map<string, double> feature_scorer::score_lm(const Derivation& derivation) {
+  return score_lm(derivation.toString());
 }
 
 map<string, double> feature_scorer::score(const vector<string>& source,
@@ -96,6 +152,11 @@ map<string, double> feature_scorer::score(const vector<string>& source,
       features[kvp.first] += kvp.second;
     }
   }
+
+  for (auto& kvp : score_lm(derivation)) {
+    features[kvp.first] += kvp.second;
+  }
+
   return features;
 }
 
