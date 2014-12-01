@@ -509,3 +509,23 @@ vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, unsigne
   }
   return kbest;
 }
+
+crf::crf() {}
+
+crf crf::ReadFromFile(adept::Stack* stack, feature_scorer* scorer, const string& filename) {
+  crf model;
+  ifstream ifs(filename);
+  boost::archive::text_iarchive ia(ifs);
+  ia & model;
+
+  model.stack = stack;
+  model.scorer = scorer;
+
+  return model;
+}
+
+void crf::WriteToFile(const string& filename) const {
+  ofstream ofs(filename);
+  boost::archive::text_oarchive oa(ofs);
+  oa & *this;
+}

@@ -3,6 +3,9 @@
 #include <string>
 #include <map>
 #include <tuple>
+#include <boost/serialization/map.hpp>
+#include <boost/archive/text_oarchive.hpp>
+#include <boost/archive/text_iarchive.hpp>
 #include "adept.h"
 #include "derivation.h"
 #include "utils.h"
@@ -34,10 +37,18 @@ public:
 
   vector<tuple<double, Derivation> > predict(const vector<string>& x, unsigned k=1);
 
+  friend class boost::serialization::access;
+  template<class Archive>
+  void serialize(Archive& ar, const unsigned int version) {
+    ar & weights;
+  }
+  static crf ReadFromFile(adept::Stack* stack, feature_scorer* scorer, const string& filename);
+  void WriteToFile(const string& filename) const;
 //private:
   map<string, adouble> weights;
 
 private:
+  crf();
   adept::Stack* stack;
   feature_scorer* scorer;
   map<string, double> historical_deltas;

@@ -298,6 +298,8 @@ int main(int argc, char** argv) {
     }
   }
   cerr.flush();
+  cerr << "Dumping model..." << endl;
+  model.WriteToFile("model.crf");
 
   for (unsigned j = 0; j < train_source.size(); ++j) {
     vector<string>& input = train_source[j];
