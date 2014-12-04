@@ -1,8 +1,8 @@
 #pragma once
-#include <unordered_set>
 #include <map>
 #include <vector>
 #include <string>
+#include <unordered_set>
 #include "NeuralLM/neurallm.h"
 #include "NeuralLM/vocabulary.h"
 #include "ttable.h"
@@ -39,5 +39,4 @@ public:
   ttable* rev_ttable;
   NeuralLM* lm;
   vocabulary* lm_vocab;
-  unordered_set<string> suffix_list;
 };

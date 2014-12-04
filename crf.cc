@@ -1,6 +1,7 @@
 #include <cassert>
 #include <iostream>
 #include <algorithm>
+#include <set>
 #include "crf.h"
 using namespace std;
 
@@ -50,7 +51,7 @@ adouble crf::word_partition_function(const string& source) {
     }
 
     vector<adouble> suffix_scores;
-    for (string suffix : scorer->suffix_list) {
+    for (string suffix : suffix_list) {
       map<string, double> suffix_features = scorer->score_suffix(target, suffix);
       for (auto kvp : scorer->score_lm(suffix)) {
         suffix_features[kvp.first] += kvp.second;
@@ -162,7 +163,7 @@ adouble crf::slow_partition_function(const vector<string>& x, const map<string, 
     vector<vector<string> > candidate_suffixes;
     for (unsigned i = 0; indices.size() > 0 && i < indices.size() - 1; ++i) {
       vector<string> suffixes;
-      for (string suffix : scorer->suffix_list) {
+      for (string suffix : suffix_list) {
         suffixes.push_back(suffix);
       }
       candidate_suffixes.push_back(suffixes);
@@ -173,7 +174,7 @@ adouble crf::slow_partition_function(const vector<string>& x, const map<string, 
     if (indices.size() > 0)
     {
       vector<string> suffixes; 
-      for (string suffix : scorer->suffix_list) {
+      for (string suffix : suffix_list) {
         suffixes.push_back(suffix);
       }
       candidate_suffixes.push_back(suffixes);
@@ -416,8 +417,28 @@ void crf::add_feature(string name) {
   }
 }
 
+Derivation crf::combine(const vector<string>& x, const vector<int>& indices, const vector<vector<tuple<adouble, string, string> > >& best_pieces, const vector<int>& permutation) {
+  Derivation d;
+  assert(d.translations.size() == d.suffixes.size());
+  for (unsigned i = 0; i < indices.size(); ++i) {
+    auto& piece = best_pieces[i][indices[i]];
+    const string& translation = get<1>(piece);
+    const string& suffix = get<2>(piece);
+    d.translations.push_back(translation);
+    d.suffixes.push_back(suffix);
+    assert(d.translations.size() == d.suffixes.size());
+    if (translation.size() > 0) {
+      d.permutation.push_back(i);
+    }
+  }
+  assert(d.translations.size() == d.suffixes.size());
+  assert(d.translations.size() == x.size());
+  return d;
+}
+
 vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, unsigned k) {
-  scorer->suffix_list.insert("");
+  bool verbose = false;
+  suffix_list.insert("");
   // First we find the k-best (translation, suffix) pairs for each index in x
   vector<vector<tuple<adouble, string, string> > > best_pieces;
   for (unsigned i = 0; i < x.size(); ++i) {
@@ -434,7 +455,7 @@ vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, unsigne
     for (string target : translation_list) {
       map<string, double> translation_features = scorer->score_translation(source, target);
       adouble translation_score = dot(translation_features, weights);
-      for (string suffix : scorer->suffix_list) {
+      for (string suffix : suffix_list) {
         if (target.size() == 0 && suffix.size() != 0) {
           continue;
         }
@@ -452,6 +473,13 @@ vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, unsigne
         }
       }
     }
+    if (verbose) {
+      cerr << "Best " << k << " candidates for word " << i << " (" << x[i] << "):" << endl;
+      int i = 0;
+      for (auto tup : local_best_pieces) {
+        cerr << "\t" << i++ << " ||| " << get<1>(tup) << "+" << get<2>(tup) << " ||| " << get<0>(tup) << endl;
+      }
+    }
     best_pieces.push_back(local_best_pieces);
   }
   assert(best_pieces.size() == x.size());
@@ -460,7 +488,9 @@ vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, unsigne
    
   // Now that we have the k-best (translation, suffix) pairs for each index,
   // run cube pruning to find our final k-best
-  vector<tuple<adouble, vector<int> > > candidates;
+  set<tuple<adouble, vector<int> > > candidates;
+  set<vector<int> > used_index_sets;
+
   vector<int> start(x.size(), 0);
   assert(start.size() == x.size()); 
   adouble start_score = 0.0;
@@ -468,32 +498,37 @@ vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, unsigne
     assert(best_pieces[i].size() > 0);
     start_score += get<0>(best_pieces[i][0]);
   }
-  candidates.push_back(make_tuple(start_score, start));
+  candidates.insert(make_tuple(start_score, start));
  
-  while (candidates.size() > 0 && kbest.size() < k) { 
-    auto best_candidate = candidates[candidates.size() - 1];
-    candidates.pop_back();
-    adouble score = get<0>(best_candidate);
-    vector<int> indices = get<1>(best_candidate);
-    assert(indices.size() == x.size());
-
-    Derivation d;
-    assert(d.translations.size() == d.suffixes.size());
-    for (unsigned i = 0; i < indices.size(); ++i) {
-      auto& piece = best_pieces[i][indices[i]];
-      string& translation = get<1>(piece);
-      string& suffix = get<2>(piece);
-      d.translations.push_back(translation);
-      d.suffixes.push_back(suffix);
-      assert(d.translations.size() == d.suffixes.size());
-      if (translation.size() > 0) {
-        d.permutation.push_back(i);
-      }
+  // TODO: Right now the list of candidates may be substantially bigger
+  // than it needs to be.
+  while (candidates.size() > 0 && kbest.size() < k) {
+    // Pop the best candidate from the list and unpack it
+    //vector<tuple<adouble, vector<int> > > temp(candidates.begin(), candidates.end());
+    //std::sort(temp.rbegin(), temp.rend());
+    auto best_candidate = *(candidates.rbegin());
+    vector<int> indices;
+    adouble score;
+    do {
+      best_candidate = *(candidates.rbegin());
+      candidates.erase(best_candidate);
+      score = get<0>(best_candidate);
+      indices = get<1>(best_candidate);
+      assert(indices.size() == x.size());
+    } while(used_index_sets.find(indices) != used_index_sets.end() && candidates.size() > 0);
+    if (used_index_sets.find(indices) != used_index_sets.end() && candidates.size() == 0) {
+      break;
     }
-    assert(d.translations.size() == d.suffixes.size());
-    assert(d.translations.size() == x.size());
-    kbest.push_back(make_tuple(score.value(), d));
+    used_index_sets.insert(indices);
 
+    // Make a derivation structure from the pieces and add it to kbest list
+    Derivation d = combine(x, indices, best_pieces, vector<int>());
+    kbest.push_back(make_tuple(score.value(), d));
+    if (verbose) {
+      cerr << "next best derivation: " << d.toLongString() << " ||| " << score.value() << endl;
+    }
+
+    // Add any new candidates to the candidate list
     assert (indices.size() == x.size());
     for (unsigned i = 0; i < indices.size(); ++i) {
       vector<int> new_indices(indices.begin(), indices.end());
@@ -503,7 +538,21 @@ vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, unsigne
         assert (new_indices.size() == x.size());
         adouble new_score = score - get<0>(best_pieces[i][indices[i]])
             + get<0>(best_pieces[i][new_indices[i]]);
-        candidates.push_back(make_tuple(new_score, new_indices));
+        candidates.insert(make_tuple(new_score, new_indices));
+      }
+    }
+    //std::sort(candidates.rbegin(), candidates.rend());
+    //candidates.erase(unique(candidates.begin(), candidates.end()), candidates.end());
+
+    if (verbose) {
+      cerr << "Current candidate list:" << endl;
+      int i = 0;
+      for (auto candidate : candidates) {
+        adouble score = get<0>(candidate);
+        vector<int> indices = get<1>(candidate);
+        assert(indices.size() == x.size());
+        Derivation d = combine(x, indices, best_pieces, vector<int>());
+        cerr << "\t" << i++ << " ||| " << d.toLongString() << " ||| " << score << endl;
       }
     }
   }

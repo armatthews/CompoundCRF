@@ -48,8 +48,6 @@ map<string, double> feature_scorer::score_translation(const string& source,
 }
 
 map<string, double> feature_scorer::score_suffix(const string& root, const string& suffix) {
-  //assert (suffix_list.find(suffix) != suffix_list.end());
-  suffix_list.insert(suffix);
   map<string, double> features;
   features["suffix_" + suffix] = 1.0;
   features["length"] = suffix.length();
@@ -70,7 +68,7 @@ map<string, double> feature_scorer::score_permutation(const vector<std::string>&
       last = permutation[i];
     }
   }
-  features["monotone"] = monotone ? 1.0 : 0.0;
+  //features["monotone"] = monotone ? 1.0 : 0.0;
   return features;
 }
 
@@ -119,7 +117,7 @@ map<string, double> feature_scorer::score_lm(const string& target) {
 
   map<string, double> features;
   //features["lm_score"] = lm_score.value();
-  features["lm_oov"] = lm_oov;
+  //features["lm_oov"] = lm_oov;
   return features;
 }
 

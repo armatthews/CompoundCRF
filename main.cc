@@ -122,8 +122,8 @@ void test(int argc, char** argv) {
   model.add_feature("suffix_");
   model.add_feature("tomato_to_null");
   model.add_feature("processing_to_null");
-  scorer.suffix_list.insert("");
-  scorer.suffix_list.insert("n");
+  model.suffix_list.insert("");
+  model.suffix_list.insert("n");
 
   vector<string> input {"tomato", "processing"}; 
 
@@ -233,7 +233,7 @@ int main(int argc, char** argv) {
     }
     for (Derivation& derivation : train_derivations[i]) {
       for (string suffix : derivation.suffixes) {
-        scorer.suffix_list.insert(suffix);
+        model.suffix_list.insert(suffix);
         model.add_feature("suffix_" + suffix);
       }
     }
@@ -317,7 +317,7 @@ int main(int argc, char** argv) {
       cout << j << " ||| G ||| " << gold.toLongString(features) << "||| " << score << endl;
     }
 
-    vector<tuple<double, Derivation> > kbest = model.predict(input, 20); 
+    vector<tuple<double, Derivation> > kbest = model.predict(input, 300); 
     for (unsigned i = 0; i < kbest.size(); ++i) {
       double score = get<0>(kbest[i]);
       Derivation& derivation = get<1>(kbest[i]);

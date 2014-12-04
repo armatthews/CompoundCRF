@@ -4,6 +4,7 @@
 #include <map>
 #include <tuple>
 #include <boost/serialization/map.hpp>
+#include <boost/serialization/unordered_set.hpp>
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/archive/text_iarchive.hpp>
 #include "adept.h"
@@ -35,18 +36,22 @@ public:
   adouble train(const vector<vector<string>>& x, const vector<Derivation>& z, const vector<vector<Derivation> >& noise_samples, double learning_rate, double l2_strength);
   void add_feature(string name);
 
+  Derivation combine(const vector<string>& x, const vector<int>& indices,
+    const vector<vector<tuple<adouble, string, string> > >& best_pieces,
+    const vector<int>& permutation);
   vector<tuple<double, Derivation> > predict(const vector<string>& x, unsigned k=1);
 
   friend class boost::serialization::access;
   template<class Archive>
   void serialize(Archive& ar, const unsigned int version) {
     ar & weights;
+    ar & suffix_list;
   }
   static crf ReadFromFile(adept::Stack* stack, feature_scorer* scorer, const string& filename);
   void WriteToFile(const string& filename) const;
 //private:
   map<string, adouble> weights;
-
+  unordered_set<string> suffix_list;
 private:
   crf();
   adept::Stack* stack;
