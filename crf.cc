@@ -2,8 +2,26 @@
 #include <iostream>
 #include <algorithm>
 #include <set>
+#include <tuple>
+#include <unordered_map>
+#include <limits>
+#include "NeuralLM/context.h"
 #include "crf.h"
 using namespace std;
+
+namespace std {
+  template<>
+  struct hash<tuple<unsigned int, Context> > {
+    hash<unsigned> uint_hash;
+    hash<Context> context_hash;
+    size_t operator()(const tuple<unsigned int, Context>& t) const {
+      size_t seed = 0;
+      hash_combine(seed, get<0>(t));
+      hash_combine(seed, get<1>(t));
+      return seed;
+    }
+  };
+}
 
 const bool use_adadelta = true;
 
@@ -34,6 +52,69 @@ adouble crf::dot(const map<string, double>& features, const map<string, adouble>
 adouble crf::score(const vector<string>& x, const Derivation& y) {
   map<string, double> features = scorer->score(x, y);
   return dot(features, weights);
+}
+
+adouble crf::lattice_partition_function(const vector<string>& x) {
+  typedef tuple<unsigned, Context> state;
+  const unsigned unk = scorer->lm_vocab->convert("<unk>");
+  const unsigned eos = scorer->lm_vocab->convert("</s>");
+
+  unordered_map<state, vector<adouble>> scores;
+  unordered_map<unsigned, unordered_set<state> > states_by_step;
+  for (unsigned i = 0; i < x.size() + 1; ++i) {
+    states_by_step[i] = unordered_set<state>();
+  } 
+
+  Context start_context(scorer->lm->context_size());
+  start_context.init(scorer->lm_vocab->lookup("<s>", 0));
+  state start_state = make_tuple(0, start_context);
+  scores[start_state].push_back(0.0);
+  states_by_step[0].insert(start_state);
+
+  for (unsigned int step = 0; step < x.size(); ++step) {
+    vector<string> translations;
+    translations.push_back("");
+    for (auto& kvp : scorer->fwd_ttable->getTranslations(x[step])) {
+      translations.push_back(kvp.first);
+    }
+
+    for (const state& from_state : states_by_step[step]) {
+      adouble from_score = log_sum_exp(scores[from_state]);
+      for (const string& translation : translations) {
+        for (const string& suffix : suffix_list) {
+          if (translations.size() == 0 && suffix.size() != 0) {
+            continue;
+          }
+
+          map<string, double> translation_features = scorer->score_translation(x[step], translation);
+          map<string, double> suffix_features = scorer->score_suffix(translation, suffix);
+          adouble local_score = dot(translation_features, weights) + dot(suffix_features, weights);
+
+          adouble lm_score = 0.0;
+          Context new_context = get<1>(from_state);
+          for (const string& letter : feature_scorer::split_utf8(translation + suffix)) {
+            const unsigned letter_id = scorer->lm_vocab->lookup(letter, unk);
+            lm_score += scorer->lm->log_prob(new_context, letter_id);
+            new_context.add(letter_id);
+          }
+          state new_state = make_tuple(step + 1, new_context);
+          states_by_step[step + 1].insert(new_state);
+          scores[new_state].push_back(from_score + local_score + lm_score * weights["lm_score"]);
+        }
+      }
+    }
+  }
+
+  // TODO: We currently overgenerate due to NULL giving spurious ambiguity
+  // TODO: Handle </s>
+
+  vector<adouble> final_scores;
+  for (const state& final_state : states_by_step[x.size()]) {
+    Context context = get<1>(final_state);
+    adouble lm_score = scorer->lm->log_prob(context, eos);
+    final_scores.push_back(log_sum_exp(scores[final_state]) + lm_score * weights["lm_score"]);
+  }
+  return log_sum_exp(final_scores);
 }
 
 // Computes log of sum_t sum_s exp (score(t|w) + score(s|t))

@@ -21,6 +21,7 @@ public:
     const string& target);
   double lexical_score(ttable* table, const vector<string>& source,
     const vector<string>& target, const vector<int>& permutation);
+  static vector<string> split_utf8(const string& target);
 
   map<string, double> score_translation(const string& source,
     const string& target);

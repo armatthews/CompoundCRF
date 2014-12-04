@@ -24,6 +24,7 @@ public:
   adouble score(const vector<string>& x, const Derivation& y);
   adouble word_partition_function(const string& source);
   adouble partition_function(const vector<string>& x);
+  adouble lattice_partition_function(const vector<string>& x);
   adouble slow_partition_function(const vector<string>& x,
     const map<string, adouble>& weights);
   adouble score_noise(const vector<string>& x, const Derivation& y);

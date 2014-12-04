@@ -68,8 +68,34 @@ map<string, double> feature_scorer::score_permutation(const vector<std::string>&
       last = permutation[i];
     }
   }
-  //features["monotone"] = monotone ? 1.0 : 0.0;
+  features["monotone"] = monotone ? 1.0 : 0.0;
   return features;
+}
+
+vector<string> feature_scorer::split_utf8(const string& target) {
+  vector<string> r;
+  // From here down to the while loop is all
+  // boiler plate code that extracts UTF8
+  // letters from a string one at a time
+  const char* s = target.c_str();
+  char* i = (char*)s;
+  char* end = i + target.length() + 1;
+
+  unsigned char symbol[6] = {0, 0, 0, 0, 0, 0};
+  do {
+    for (int i = 0; i < 5; ++i) {
+      symbol[i] = 0;
+    }
+
+    uint32_t code = utf8::next(i, end);
+    if (code == 0) {
+      continue;
+    }
+    utf8::append(code, symbol);
+    string c = (char*)symbol;
+    r.push_back(c);
+  } while(i < end);
+  return r;
 }
 
 map<string, double> feature_scorer::score_lm(const string& target) { 
@@ -116,8 +142,8 @@ map<string, double> feature_scorer::score_lm(const string& target) {
   lm_score += lm->log_prob(eos);
 
   map<string, double> features;
-  //features["lm_score"] = lm_score.value();
-  //features["lm_oov"] = lm_oov;
+  features["lm_score"] = lm_score.value();
+  features["lm_oov"] = lm_oov;
   return features;
 }
 
