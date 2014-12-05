@@ -37,9 +37,9 @@ public:
   adouble train(const vector<vector<string>>& x, const vector<Derivation>& z, const vector<vector<Derivation> >& noise_samples, double learning_rate, double l2_strength);
   void add_feature(string name);
 
-  Derivation combine(const vector<string>& x, const vector<int>& indices,
+  Derivation combine(const vector<string>& x, const vector<unsigned>& indices,
     const vector<vector<tuple<adouble, string, string> > >& best_pieces,
-    const vector<int>& permutation);
+    const vector<unsigned>& permutation);
   vector<tuple<double, Derivation> > predict(const vector<string>& x, unsigned k=1);
 
   friend class boost::serialization::access;

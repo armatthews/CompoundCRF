@@ -20,14 +20,14 @@ public:
   double lexical_score(ttable* table, const string& source,
     const string& target);
   double lexical_score(ttable* table, const vector<string>& source,
-    const vector<string>& target, const vector<int>& permutation);
+    const vector<string>& target, const vector<unsigned>& permutation);
   static vector<string> split_utf8(const string& target);
 
   map<string, double> score_translation(const string& source,
     const string& target);
   map<string, double> score_suffix(const string& root, const string& suffix);
   map<string, double> score_permutation(const vector<string>& source,
-    const vector<int>& permutation);
+    const vector<unsigned>& permutation);
   map<string, double> score_lm(const string& output);
   map<string, double> score_lm(const Derivation& derivation);
 

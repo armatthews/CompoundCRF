@@ -36,7 +36,7 @@ Derivation noise_model::sample(const vector<string>& inputs) {
   }
 
   vector<string> suffixes (inputs.size(), "");
-  vector<int> permutation;
+  vector<unsigned> permutation;
   for (unsigned i = 0; i < inputs.size(); ++i) {
     permutation.push_back(i);
   }

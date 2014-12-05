@@ -19,13 +19,13 @@ double feature_scorer::lexical_score(ttable* table, const string& source,
   if (table->getScore(source, target, score)) {
     return score;
   }
-  else {
+  else { 
     return oov_score;
   }
 }
 
 double feature_scorer::lexical_score(ttable* table, const vector<string>& source,
-    const vector<string>& target, const vector<int>& permutation) {
+    const vector<string>& target, const vector<unsigned>& permutation) {
   double total_score = 0.0; 
   for (int i : permutation) {
     total_score += lexical_score(table, source[i], target[i]);
@@ -34,7 +34,7 @@ double feature_scorer::lexical_score(ttable* table, const vector<string>& source
 }
 
 map<string, double> feature_scorer::score_translation(const string& source,
-    const string& target) {
+    const string& target) { 
   map<string, double> features;
   if (target.size() == 0) {
     features["tgt_null"] = 1;
@@ -55,11 +55,11 @@ map<string, double> feature_scorer::score_suffix(const string& root, const strin
 }
 
 map<string, double> feature_scorer::score_permutation(const vector<std::string>& source,
-    const vector<int>& permutation) {
+    const vector<unsigned>& permutation) {
   map<string, double> features;
   bool monotone = true;
   if (permutation.size() > 0) {
-    int last = permutation[0];
+    unsigned last = permutation[0];
     for (unsigned i = 1; i < permutation.size(); ++i) {
       if (permutation[i] < last) {
         monotone = false;
@@ -155,7 +155,7 @@ map<string, double> feature_scorer::score(const vector<string>& source,
     const Derivation& derivation) {
   const vector<string> translations = derivation.translations;
   const vector<string> suffixes = derivation.suffixes;
-  const vector<int> permutation = derivation.permutation;
+  const vector<unsigned> permutation = derivation.permutation;
 
   assert (source.size() == translations.size());
   assert (translations.size() == suffixes.size());

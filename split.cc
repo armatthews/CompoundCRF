@@ -17,7 +17,7 @@ void process(const vector<string>& english, string german,
   for (Derivation& derivation : analyzer->analyze(english, german, true)) {
     vector<string>& translations = derivation.translations;
     vector<string>& suffixes = derivation.suffixes;
-    vector<int>& indices = derivation.permutation;
+    vector<unsigned>& indices = derivation.permutation;
 
     // Output the translations and suffixes
     for (unsigned i = 0; i < indices.size(); ++i) {

@@ -3,7 +3,7 @@ DEBUG = -g -O3
 CFLAGS = -Wall -Wextra -pedantic -Wno-unused-parameter -Wno-unused-variable -std=c++11 -c $(DEBUG) -I/Users/austinma/git/cpyp
 LFLAGS = -Wall -Wextra -pedantic -Wno-unused-variable -Wno-unused-parameter -ladept -lboost_serialization $(DEBUG)
 
-all: crf split load_lm
+all: crf split load_lm score
 
 CRF_OBJECTS = main.o crf.o utils.o ttable.o feature_scorer.o compound_analyzer.o noise_model.o derivation.o
 crf: $(CRF_OBJECTS)
@@ -12,8 +12,14 @@ crf: $(CRF_OBJECTS)
 split: split.o ttable.o utils.o feature_scorer.o compound_analyzer.o derivation.o
 	$(CC) split.o ttable.o utils.o feature_scorer.o compound_analyzer.o derivation.o NeuralLM/vocabulary.o $(LFLAGS) -o split
 
+score: score.o ttable.o utils.o feature_scorer.o crf.o derivation.o
+	$(CC) score.o ttable.o utils.o feature_scorer.o crf.o derivation.o NeuralLM/vocabulary.o $(LFLAGS) -o score
+
 split.o: split.cc utils.h ttable.h feature_scorer.h compound_analyzer.h derivation.h
 	$(CC) $(CFLAGS) split.cc
+
+score.o: score.cc crf.h utils.h feature_scorer.h derivation.h
+	$(CC) $(CFLAGS) score.cc
 
 load_lm: load_lm.o utils.o
 	$(CC) load_lm.o utils.o NeuralLM/vocabulary.o $(LFLAGS) -o load_lm
@@ -33,7 +39,7 @@ utils.o: utils.cc utils.h
 derivation.o: derivation.cc derivation.h
 	$(CC) $(CFLAGS) derivation.cc
 
-feature_scorer.o: feature_scorer.cc ttable.h feature_scorer.h derivation.h
+feature_scorer.o: feature_scorer.cc ttable.h feature_scorer.h derivation.h NeuralLM/neurallm.h NeuralLM/context.h
 	$(CC) $(CFLAGS) feature_scorer.cc
 
 compound_analyzer.o: compound_analyzer.cc compound_analyzer.h utils.h ttable.h derivation.h

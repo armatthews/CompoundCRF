@@ -11,13 +11,16 @@ using namespace std;
 
 namespace std {
   template<>
-  struct hash<tuple<unsigned int, Context> > {
+  struct hash<tuple<unsigned int, vector<unsigned>, Context> > {
     hash<unsigned> uint_hash;
     hash<Context> context_hash;
-    size_t operator()(const tuple<unsigned int, Context>& t) const {
+    size_t operator()(const tuple<unsigned int, vector<unsigned>, Context>& t) const {
       size_t seed = 0;
       hash_combine(seed, get<0>(t));
-      hash_combine(seed, get<1>(t));
+      for (unsigned i : get<1>(t)) {
+        hash_combine(seed, i);
+      }
+      hash_combine(seed, get<2>(t));
       return seed;
     }
   };
@@ -55,9 +58,13 @@ adouble crf::score(const vector<string>& x, const Derivation& y) {
 }
 
 adouble crf::lattice_partition_function(const vector<string>& x) {
-  typedef tuple<unsigned, Context> state;
+  // a state is a coverage bitvector, a list of used source indices, and a context
+  // the bit vector includes words that translate to NULL
+  // but the vector of indices does not
+  typedef tuple<unsigned, vector<unsigned>, Context> state;
   const unsigned unk = scorer->lm_vocab->convert("<unk>");
   const unsigned eos = scorer->lm_vocab->convert("</s>");
+  const unsigned one = 1;
 
   unordered_map<state, vector<adouble>> scores;
   unordered_map<unsigned, unordered_set<state> > states_by_step;
@@ -67,52 +74,73 @@ adouble crf::lattice_partition_function(const vector<string>& x) {
 
   Context start_context(scorer->lm->context_size());
   start_context.init(scorer->lm_vocab->lookup("<s>", 0));
-  state start_state = make_tuple(0, start_context);
-  scores[start_state].push_back(0.0);
-  states_by_step[0].insert(start_state);
+  vector<unsigned> empty_coverage;
+  for (unsigned null_coverage = 0; null_coverage < (one << x.size()); ++null_coverage) { 
+    adouble score = 0.0;
+    for (unsigned int i = 0; i < x.size(); ++i) {
+      if (null_coverage & (one << i)) {
+        map<string, double> translation_features = scorer->score_translation(x[i], "");
+        map<string, double> suffix_features = scorer->score_suffix("", "");
+        adouble local_score = dot(translation_features, weights) + dot(suffix_features, weights);
+        score += local_score;
+      }
+    }
+    state start_state = make_tuple(null_coverage, empty_coverage, start_context);
+    scores[start_state].push_back(score);
+    states_by_step[popCount(null_coverage)].insert(start_state);
+  }
 
   for (unsigned int step = 0; step < x.size(); ++step) {
-    vector<string> translations;
-    translations.push_back("");
-    for (auto& kvp : scorer->fwd_ttable->getTranslations(x[step])) {
-      translations.push_back(kvp.first);
-    }
-
     for (const state& from_state : states_by_step[step]) {
       adouble from_score = log_sum_exp(scores[from_state]);
-      for (const string& translation : translations) {
-        for (const string& suffix : suffix_list) {
-          if (translations.size() == 0 && suffix.size() != 0) {
-            continue;
-          }
+      unsigned coverage = get<0>(from_state);
+      assert (popCount(coverage) == step);
+      for (unsigned int i = 0; i < x.size(); ++i) {
+        if (coverage & (one << i)) {
+          continue;
+        } 
+        for (const auto& pair : scorer->fwd_ttable->getTranslations(x[i])) {
+          const string& translation = get<0>(pair);
+          for (const string& suffix : suffix_list) {
+            map<string, double> translation_features = scorer->score_translation(x[i], translation);
+            map<string, double> suffix_features = scorer->score_suffix(translation, suffix);
+            adouble local_score = dot(translation_features, weights) + dot(suffix_features, weights);
 
-          map<string, double> translation_features = scorer->score_translation(x[step], translation);
-          map<string, double> suffix_features = scorer->score_suffix(translation, suffix);
-          adouble local_score = dot(translation_features, weights) + dot(suffix_features, weights);
-
-          adouble lm_score = 0.0;
-          Context new_context = get<1>(from_state);
-          for (const string& letter : feature_scorer::split_utf8(translation + suffix)) {
-            const unsigned letter_id = scorer->lm_vocab->lookup(letter, unk);
-            lm_score += scorer->lm->log_prob(new_context, letter_id);
-            new_context.add(letter_id);
+            adouble lm_score = 0.0;
+            vector<unsigned> new_coverage = get<1>(from_state);
+            new_coverage.push_back(i);
+            Context new_context = get<2>(from_state);
+            for (const string& letter : feature_scorer::split_utf8(translation + suffix)) {
+              const unsigned letter_id = scorer->lm_vocab->lookup(letter, unk);
+              lm_score += scorer->lm->log_prob(new_context, letter_id);
+              new_context.add(letter_id);
+            }
+            state new_state = make_tuple(coverage | (one << i), new_coverage, new_context);
+            assert (popCount(get<0>(new_state)) == step + 1);
+            states_by_step[step + 1].insert(new_state);
+            scores[new_state].push_back(from_score + local_score + lm_score * weights["lm_score"]);
           }
-          state new_state = make_tuple(step + 1, new_context);
-          states_by_step[step + 1].insert(new_state);
-          scores[new_state].push_back(from_score + local_score + lm_score * weights["lm_score"]);
         }
       }
     }
   }
 
-  // TODO: We currently overgenerate due to NULL giving spurious ambiguity
-  // TODO: Handle </s>
-
   vector<adouble> final_scores;
   for (const state& final_state : states_by_step[x.size()]) {
-    Context context = get<1>(final_state);
+    unsigned coverage = get<0>(final_state);
+    assert (popCount(coverage) == x.size());
+    assert (coverage < (one << x.size()));
+
+    vector<unsigned> permutation = get<1>(final_state);
+    adouble permutation_score = dot(scorer->score_permutation(x, permutation), weights);
+
+    Context context = get<2>(final_state);
     adouble lm_score = scorer->lm->log_prob(context, eos);
-    final_scores.push_back(log_sum_exp(scores[final_state]) + lm_score * weights["lm_score"]);
+
+    adouble final_score = log_sum_exp(scores[final_state]);
+    final_score += lm_score * weights["lm_score"];
+    final_score += permutation_score;
+    final_scores.push_back(final_score);
   }
   return log_sum_exp(final_scores);
 }
@@ -180,7 +208,7 @@ adouble crf::partition_function(const vector<string>& x) {
   // Loop over combinations of NULLs and non-NULLs
   for (unsigned i = 0; i < (one << x.size()); ++i) {
     adouble score = 0.0;
-    vector<int> indices;
+    vector<unsigned> indices;
     for (unsigned j = 0; j < x.size(); ++j) {
       if (i & (1 << j)) {
         indices.push_back(j);
@@ -229,7 +257,7 @@ adouble crf::slow_partition_function(const vector<string>& x, const map<string, 
     // This variable will hold a permutation of the integers [0, |G|)
     // Note that we remove indices coresponding to NULL translations
     // since their ordering does not affect the output.
-    vector<int> indices;
+    vector<unsigned> indices;
     for (unsigned i = 0; i < translations.size(); ++i) {
       if (translations[i].size() != 0) {
         indices.push_back(i);
@@ -498,7 +526,7 @@ void crf::add_feature(string name) {
   }
 }
 
-Derivation crf::combine(const vector<string>& x, const vector<int>& indices, const vector<vector<tuple<adouble, string, string> > >& best_pieces, const vector<int>& permutation) {
+Derivation crf::combine(const vector<string>& x, const vector<unsigned>& indices, const vector<vector<tuple<adouble, string, string> > >& best_pieces, const vector<unsigned>& permutation) {
   Derivation d;
   assert(d.translations.size() == d.suffixes.size());
   for (unsigned i = 0; i < indices.size(); ++i) {
@@ -569,10 +597,10 @@ vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, unsigne
    
   // Now that we have the k-best (translation, suffix) pairs for each index,
   // run cube pruning to find our final k-best
-  set<tuple<adouble, vector<int> > > candidates;
-  set<vector<int> > used_index_sets;
+  set<tuple<adouble, vector<unsigned> > > candidates;
+  set<vector<unsigned> > used_index_sets;
 
-  vector<int> start(x.size(), 0);
+  vector<unsigned> start(x.size(), 0);
   assert(start.size() == x.size()); 
   adouble start_score = 0.0;
   for (unsigned i = 0; i < x.size(); ++i) {
@@ -585,10 +613,8 @@ vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, unsigne
   // than it needs to be.
   while (candidates.size() > 0 && kbest.size() < k) {
     // Pop the best candidate from the list and unpack it
-    //vector<tuple<adouble, vector<int> > > temp(candidates.begin(), candidates.end());
-    //std::sort(temp.rbegin(), temp.rend());
     auto best_candidate = *(candidates.rbegin());
-    vector<int> indices;
+    vector<unsigned> indices;
     adouble score;
     do {
       best_candidate = *(candidates.rbegin());
@@ -603,7 +629,7 @@ vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, unsigne
     used_index_sets.insert(indices);
 
     // Make a derivation structure from the pieces and add it to kbest list
-    Derivation d = combine(x, indices, best_pieces, vector<int>());
+    Derivation d = combine(x, indices, best_pieces, vector<unsigned>());
     kbest.push_back(make_tuple(score.value(), d));
     if (verbose) {
       cerr << "next best derivation: " << d.toLongString() << " ||| " << score.value() << endl;
@@ -612,7 +638,7 @@ vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, unsigne
     // Add any new candidates to the candidate list
     assert (indices.size() == x.size());
     for (unsigned i = 0; i < indices.size(); ++i) {
-      vector<int> new_indices(indices.begin(), indices.end());
+      vector<unsigned> new_indices(indices.begin(), indices.end());
       assert (new_indices.size() == indices.size());
       if (new_indices[i] + 1 < best_pieces[i].size()) {
         new_indices[i]++;
@@ -630,9 +656,9 @@ vector<tuple<double, Derivation> > crf::predict(const vector<string>& x, unsigne
       int i = 0;
       for (auto candidate : candidates) {
         adouble score = get<0>(candidate);
-        vector<int> indices = get<1>(candidate);
+        vector<unsigned> indices = get<1>(candidate);
         assert(indices.size() == x.size());
-        Derivation d = combine(x, indices, best_pieces, vector<int>());
+        Derivation d = combine(x, indices, best_pieces, vector<unsigned>());
         cerr << "\t" << i++ << " ||| " << d.toLongString() << " ||| " << score << endl;
       }
     }

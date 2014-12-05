@@ -13,7 +13,7 @@ compound_analyzer::compound_analyzer(ttable* fwd_ttable) {
 // out of the pieces given, in the order given.
 // If this is not possible, returns false. If possible, returns true.
 bool compound_analyzer::decompose(string compound, const vector<string>& pieces,
-    vector<int> permutation, vector<string>& suffixes) {
+    vector<unsigned> permutation, vector<string>& suffixes) {
   suffixes.clear();
   suffixes.resize(pieces.size());
   for (unsigned i = 0; i < suffixes.size(); ++i) {
@@ -94,7 +94,7 @@ vector<Derivation> compound_analyzer::analyze(const vector<string>& english, str
     // This variable will hold a permutation of the integers [0, |G|)
     // Note that we remove indices coresponding to NULL translations
     // since their ordering does not affect the output.
-    vector<int> indices;
+    vector<unsigned> indices;
     for (unsigned i = 0; i < translations.size(); ++i) {
       if (translations[i] != "") {
         indices.push_back(i);
