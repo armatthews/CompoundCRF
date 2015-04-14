@@ -7,6 +7,8 @@ using namespace std;
 feature_scorer::feature_scorer(ttable* fwd, ttable* rev) {
   fwd_ttable = fwd;
   rev_ttable = rev;
+  lm = NULL;
+  lm_vocab = NULL;
 }
 
 double feature_scorer::lexical_score(ttable* table, const string& source,
@@ -104,7 +106,7 @@ map<string, double> feature_scorer::score_lm(const string& target) {
   const unsigned unk = lm_vocab->convert("<unk>");
   const unsigned bos = lm_vocab->convert("<s>");
   const unsigned eos = lm_vocab->convert("</s>");
-  lm->reset_context(bos);
+  //lm->reset_context(bos);
 
   // From here down to the while loop is all
   // boiler plate code that extracts UTF8
@@ -129,17 +131,17 @@ map<string, double> feature_scorer::score_lm(const string& target) {
     // Now that we have a single UTF8 character,
     // score it, then add it to the context to be
     // re-used for the next character
-    unsigned cid = lm_vocab->lookup(c, unk);
+    /*unsigned cid = lm_vocab->lookup(c, unk);
     if (cid != unk) {
       lm_score += lm->log_prob(cid);
     }
     else {
       lm_oov += 1;
     }
-    lm->add_to_context(cid);
+    lm->add_to_context(cid);*/
   } while(i < end);
 
-  lm_score += lm->log_prob(eos);
+  //lm_score += lm->log_prob(eos);
 
   map<string, double> features;
   features["lm_score"] = lm_score.value();
@@ -177,8 +179,10 @@ map<string, double> feature_scorer::score(const vector<string>& source,
     }
   }
 
-  for (auto& kvp : score_lm(derivation)) {
-    features[kvp.first] += kvp.second;
+  if (lm != NULL) {
+    for (auto& kvp : score_lm(derivation)) {
+      features[kvp.first] += kvp.second;
+    }
   }
 
   return features;

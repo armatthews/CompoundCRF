@@ -12,6 +12,7 @@ public:
   bool decompose(string compound, const vector<string>& pieces,
     vector<unsigned> permutation, vector<string>& suffixes);
   vector<Derivation> analyze(const vector<string>& english, string german, bool verbose = false);
+  bool isReachable(const vector<string>& english, string german);
 private:
   ttable* fwd_ttable;
 };

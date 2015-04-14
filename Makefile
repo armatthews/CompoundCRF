@@ -1,31 +1,44 @@
 CC = g++
 DEBUG = -g -O3
 CFLAGS = -Wall -Wextra -pedantic -Wno-unused-parameter -Wno-unused-variable -std=c++11 -c $(DEBUG) -I/Users/austinma/git/cpyp
-LFLAGS = -Wall -Wextra -pedantic -Wno-unused-variable -Wno-unused-parameter -ladept -lboost_serialization $(DEBUG)
+LFLAGS = -Wall -Wextra -pedantic -Wno-unused-variable -Wno-unused-parameter -std=c++11 -ladept -lboost_serialization $(DEBUG)
 
-all: crf split load_lm score
+all: crf split score reachable decoder
 
-CRF_OBJECTS = main.o crf.o utils.o ttable.o feature_scorer.o compound_analyzer.o noise_model.o derivation.o
+CRF_OBJECTS = main.o crf.o utils.o ttable.o feature_scorer.o compound_analyzer.o noise_model.o derivation.o NeuralLM/vocabulary.o NeuralLM/neurallm.cc
 crf: $(CRF_OBJECTS)
-	$(CC) $(CRF_OBJECTS) NeuralLM/vocabulary.o $(LFLAGS) -o crf
+	$(CC) $(CRF_OBJECTS) $(LFLAGS) -o crf
 
-split: split.o ttable.o utils.o feature_scorer.o compound_analyzer.o derivation.o
-	$(CC) split.o ttable.o utils.o feature_scorer.o compound_analyzer.o derivation.o NeuralLM/vocabulary.o $(LFLAGS) -o split
+DECODER_OBJECTS = decoder.o utils.o ttable.o feature_scorer.o compound_analyzer.o derivation.o NeuralLM/vocabulary.o NeuralLM/neurallm.cc
+decoder: $(DECODER_OBJECTS)
+	$(CC) $(DECODER_OBJECTS) $(LFLAGS) -o decoder
 
-score: score.o ttable.o utils.o feature_scorer.o crf.o derivation.o
-	$(CC) score.o ttable.o utils.o feature_scorer.o crf.o derivation.o NeuralLM/vocabulary.o $(LFLAGS) -o score
+SPLIT_OBJECTS = split.o ttable.o utils.o feature_scorer.o compound_analyzer.o derivation.o NeuralLM/vocabulary.o NeuralLM/neurallm.o
+split: $(SPLIT_OBJECTS) 
+	$(CC) $(SPLIT_OBJECTS) $(LFLAGS) -o split
+
+SCORE_OBJECTS = score.o ttable.o utils.o feature_scorer.o crf.o derivation.o NeuralLM/vocabulary.o NeuralLM/neurallm.o
+score: $(SCORE_OBJECTS)
+	$(CC) $(SCORE_OBJECTS) $(LFLAGS) -o score
+
+REACHABLE_OBJECTS = reachable.o crf.o utils.o ttable.o feature_scorer.o compound_analyzer.o noise_model.o derivation.o NeuralLM/vocabulary.o NeuralLM/neurallm.cc
+reachable: $(REACHABLE_OBJECTS)
+	$(CC) $(REACHABLE_OBJECTS) $(LFLAGS) -o reachable
+
+reachable.o: reachable.cc crf.h utils.h feature_scorer.h compound_analyzer.h noise_model.h derivation.h
+	$(CC) $(CFLAGS) reachable.cc
+
+NeuralLM/vocabulary.o: NeuralLM/vocabulary.cc NeuralLM/vocabulary.h
+	$(CC) $(CFLAGS) NeuralLM/vocabulary.cc -o NeuralLM/vocabulary.o
+
+NeuralLM/neurallm.o: NeuralLM/neurallm.cc NeuralLM/neurallm.h NeuralLM/context.h NeuralLM/utils.h NeuralLM/param.h
+	$(CC) $(CFLAGS) NeuralLM/neurallm.cc -o NeuralLM/neurallm.o
 
 split.o: split.cc utils.h ttable.h feature_scorer.h compound_analyzer.h derivation.h
 	$(CC) $(CFLAGS) split.cc
 
 score.o: score.cc crf.h utils.h feature_scorer.h derivation.h
 	$(CC) $(CFLAGS) score.cc
-
-load_lm: load_lm.o utils.o
-	$(CC) load_lm.o utils.o NeuralLM/vocabulary.o $(LFLAGS) -o load_lm
-
-load_lm.o: load_lm.cc utils.h NeuralLM/neurallm.h NeuralLM/utils.h
-	$(CC) $(CFLAGS) load_lm.cc
 
 noise_model.o: noise_model.cc noise_model.h ttable.h utils.h derivation.h
 	$(CC) $(CFLAGS) noise_model.cc
@@ -51,7 +64,12 @@ main.o: main.cc crf.h utils.h feature_scorer.h compound_analyzer.h noise_model.h
 crf.o: crf.cc crf.h utils.h feature_scorer.h derivation.h
 	$(CC) $(CFLAGS) crf.cc
 
+decoder.o: decoder.cc utils.h feature_scorer.h derivation.h
+	$(CC) $(CFLAGS) decoder.cc
+
 clean:
-	rm -f crf
+	rm -f ./crf
 	rm -f ./split
+	rm -f ./score
 	rm *.o
+	rm -f NeuralLM/*.o

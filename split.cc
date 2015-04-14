@@ -11,32 +11,34 @@
 #include "derivation.h"
 using namespace std;
 
-void process(const vector<string>& english, string german,
+void process(int line_number, const vector<string>& english, string german,
     compound_analyzer* analyzer, feature_scorer* scorer) {
 
-  for (Derivation& derivation : analyzer->analyze(english, german, true)) {
+  for (Derivation& derivation : analyzer->analyze(english, german, false)) {
     vector<string>& translations = derivation.translations;
     vector<string>& suffixes = derivation.suffixes;
     vector<unsigned>& indices = derivation.permutation;
 
+    cout << line_number << " ||| ";
+
     // Output the translations and suffixes
     for (unsigned i = 0; i < indices.size(); ++i) {
-      cerr << translations[indices[i]] << "+" << suffixes[i] << " ";
+      cout << translations[indices[i]] << "+" << suffixes[i] << " ";
     }
-    cerr << "||| ";
+    cout << "||| ";
 
     // Output the permutation
     for (unsigned i = 0; i < indices.size(); ++i) {
-      cerr << indices[i] << " ";
+      cout << indices[i] << " ";
     }
-    cerr << "||| ";
+    cout << "||| ";
 
     // Output the features
     map<string, double> features = scorer->score(english, derivation);
     for (auto it = features.begin(); it != features.end(); ++it) {
-      cerr << it->first << "=" << it->second << " ";
+      cout << it->first << "=" << it->second << " ";
     }
-    cerr << endl;
+    cout << endl;
   }
 }
 
@@ -49,6 +51,7 @@ int main(int argc, char** argv) {
   if (argc < 3) {
     ShowUsageAndExit(argv);
   }
+  adept::Stack stack;
   ttable fwd_ttable;
   ttable rev_ttable;
   fwd_ttable.load(argv[1]);
@@ -57,8 +60,10 @@ int main(int argc, char** argv) {
   compound_analyzer analyzer(&fwd_ttable);
 
   string line;
+  int line_number = 0;
   while (getline(cin, line)) {
     stringstream sstream(line);
+    line_number++;
     vector<string> english;
     string german;
     string temp;
@@ -69,7 +74,7 @@ int main(int argc, char** argv) {
     german = english[english.size() - 1];
     english.pop_back();
 
-    process(english, german, &analyzer, &scorer);
+    process(line_number, english, german, &analyzer, &scorer);
   }
 
   return 0;

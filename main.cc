@@ -281,7 +281,7 @@ int main(int argc, char** argv) {
   cerr << "Iteration " << 0 << " loss: " << loss << endl;*/
 
   cerr << "Training..." << endl;
-  for (unsigned iter = 0; iter < 10; ++iter) {
+  for (unsigned iter = 0; iter < 0; ++iter) {
     //loss = model.train(train_source, chosen_derivations, noise_samples, eta, lambda);
     //loss = model.train(train_source, chosen_derivations, eta, lambda);
     //loss = model.train(train_source, train_derivations, eta, lambda);
@@ -317,7 +317,7 @@ int main(int argc, char** argv) {
       cout << j << " ||| G ||| " << gold.toLongString(features) << "||| " << score << endl;
     }
 
-    vector<tuple<double, Derivation> > kbest = model.predict(input, 300); 
+    vector<tuple<double, Derivation> > kbest = model.predict(input, 10); 
     for (unsigned i = 0; i < kbest.size(); ++i) {
       double score = get<0>(kbest[i]);
       Derivation& derivation = get<1>(kbest[i]);

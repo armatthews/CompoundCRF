@@ -5,6 +5,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <limits>
+#include <fstream>
 #include "NeuralLM/context.h"
 #include "crf.h"
 using namespace std;
@@ -373,7 +374,7 @@ adouble crf::train_nobatch(const vector<vector<string> >& x, const vector<vector
     cerr.flush();
     adouble log_loss = 0.0;
     stack->new_recording();
-    adouble d = partition_function(x[i]);
+    adouble d = lattice_partition_function(x[i]);
     /*vector<adouble> scores;
     for (unsigned int j = 0; j < y[i].size(); ++j) {
       scores.push_back(score(x[i], y[i][j]));
